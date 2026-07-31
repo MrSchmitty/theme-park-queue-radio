@@ -316,7 +316,7 @@
           <input type="password" id="tkey" placeholder="key" autocomplete="off">
         </div>
         <div class="field">
-          <label for="tvoice">Voice name</label>
+          <label for="tvoice" id="tvoicelabel">Voice for this host</label>
           <select id="tvoice"></select>
         </div>
       </div>
@@ -400,6 +400,37 @@ const DEMOS = {
   fair:     "Tomorrow is not a distant country. It is a place we are building together, one bright and orderly day at a time."
 };
 
+const NAMES = {
+  mansion:'Mansion host', skipper:'Dock skipper', dungeon:'Dungeon pirate', mining:'Mine foreman',
+  bayou:'Bayou hall', bellhop:'Night bellhop', starport:'Starport gate', outfitter:'Trek outfitter',
+  studio:'Studio desk', fair:'Fair narrator'
+};
+
+/* Casting. `prefer` matches against whatever voices the device actually has;
+   rate and pitch do the heavy lifting on iOS where the voice list is short. */
+const VOICE = {
+  mansion:  { prefer:['Daniel','Arthur','Google UK English Male','Alex'], rate:.76, pitch:.75,
+              openai:'onyx',    direct:"Slow, sepulchral, and impeccably genteel. Long pauses. Velvet menace under perfect courtesy. Never rush a line." },
+  skipper:  { prefer:['Aaron','Fred','Google US English','Alex'], rate:1.12, pitch:1.05,
+              openai:'verse',   direct:"Brisk, deadpan, faintly bored. Toss the punchline away rather than selling it. No laughing at your own joke." },
+  dungeon:  { prefer:['Arthur','Daniel','Gordon','Alex'], rate:.88, pitch:.6,
+              openai:'ash',     direct:"Low, gravelly, conspiratorial. Half-whispered, as if avoiding a guard. Rough around the edges." },
+  mining:   { prefer:['Alex','Fred','Aaron'], rate:.9, pitch:.8,
+              openai:'echo',    direct:"Weathered and plainspoken. Flat prairie cadence, unhurried, matter-of-fact about hardship." },
+  bayou:    { prefer:['Nicky','Samantha','Karen'], rate:.92, pitch:1,
+              openai:'coral',   direct:"Warm, easy, front-porch drawl. Unhurried and welcoming, like talking over music." },
+  bellhop:  { prefer:['Arthur','Daniel','Alex'], rate:.84, pitch:.85,
+              openai:'ballad',  direct:"Clipped, formal, unnervingly calm. Perfect diction. Deliver unsettling details as routine housekeeping." },
+  starport: { prefer:['Karen','Serena','Martha','Google UK English Female'], rate:1.1, pitch:1.18,
+              openai:'shimmer', direct:"Bright, crisp, over-articulated public address. Relentlessly pleasant. Slight synthetic polish." },
+  outfitter:{ prefer:['Rishi','Moira','Daniel'], rate:.95, pitch:.9,
+              openai:'sage',    direct:"Calm, kind, seasoned. Steady radio delivery with a little distance on it, as if over a weak signal." },
+  studio:   { prefer:['Samantha','Victoria','Nicky'], rate:1.18, pitch:1.1,
+              openai:'nova',    direct:"Fast, breezy, mid-task. Casual and a little distracted, like someone talking while typing." },
+  fair:     { prefer:['Alex','Arthur','Daniel'], rate:.82, pitch:.9,
+              openai:'fable',   direct:"Grand, warm, mid-century newsreel. Total sincerity, rising conviction, generous pauses before big claims." }
+};
+
 const store = {
   get(k,d){ try{ const v=localStorage.getItem('parkradio.'+k); return v===null?d:JSON.parse(v);}catch(e){return d} },
   set(k,v){ try{ localStorage.setItem('parkradio.'+k, JSON.stringify(v)); }catch(e){} },
@@ -423,13 +454,15 @@ const cfg = {
   bvoice:  store.get('bvoice', ''),
   ovoice:  store.get('ovoice', 'ash'),
   evoice:  store.get('evoice', ''),
-  persona: store.get('persona', PERSONAS.mansion)
+  persona: store.get('persona', PERSONAS.mansion),
+  pkey:    store.get('pkey', 'mansion'),
+  voices:  store.get('voices', {})
 };
 
 let player, ready = false, current = null, played = 0;
 let history = [], recentLines = [], segTimer = null, sleepAt = 0, talking = false;
 let upcoming = null;          // { id, line, url }
-let fadeTimer = null, watchdog = null;
+let fadeTimer = null, watchdog = null, voiceKey = cfg.pkey;
 
 /* Only cry wolf if the player really never starts. */
 function armWatchdog(){
@@ -573,29 +606,60 @@ async function loadElevenVoices(){
   } catch(e){ setStatus('bad','ElevenLabs: network error'); }
 }
 
+/* Which voice should this host use, honouring any override you've set. */
+function voiceFor(k, provider){
+  const over = cfg.voices[k] && cfg.voices[k][provider];
+  if(over) return over;
+  const rec = VOICE[k] || {};
+  if(provider === 'openai') return rec.openai || 'ash';
+  if(provider === 'eleven') return cfg.evoice || '';
+  return '';
+}
+
+function browserVoiceFor(k){
+  const over = cfg.voices[k] && cfg.voices[k].browser;
+  if(over){ const v = bvoices.find(x => x.voiceURI === over); if(v) return v; }
+  const pref = (VOICE[k] || {}).prefer || [];
+  for(const p of pref){
+    const v = bvoices.find(x => x.name.toLowerCase().includes(p.toLowerCase()));
+    if(v) return v;
+  }
+  return bvoices.find(x => x.voiceURI === cfg.bvoice) || bvoices[0];
+}
+
 /* Returns an object URL for spoken audio, or null to use the browser voice. */
-async function synthesize(text){
+async function synthesize(text, k){
+  k = k || voiceKey;
+  const rec = VOICE[k] || {};
   if(cfg.tts === 'openai' && cfg.okey){
-    for(const model of ['gpt-4o-mini-tts','tts-1']){
+    const attempts = [
+      { model:'gpt-4o-mini-tts', instructions: rec.direct },
+      { model:'tts-1' }
+    ];
+    for(const a of attempts){
       try {
+        const body = { model:a.model, voice: voiceFor(k,'openai'), input: text };
+        if(a.instructions) body.instructions = a.instructions;
         const r = await fetch('https://api.openai.com/v1/audio/speech', {
           method:'POST',
           headers:{ 'content-type':'application/json', 'authorization':'Bearer '+cfg.okey },
-          body: JSON.stringify({ model, voice: cfg.ovoice, input: text })
+          body: JSON.stringify(body)
         });
         if(r.ok){ setStatus('ok','Voice: OpenAI ready'); return URL.createObjectURL(await r.blob()); }
         if(r.status === 401){ setStatus('bad','OpenAI: key rejected'); return null; }
-      } catch(e){ /* try next model, then fall through */ }
+      } catch(e){ /* try the next model, then fall through */ }
     }
     setStatus('bad','OpenAI: voice unavailable, using built-in');
     return null;
   }
-  if(cfg.tts === 'eleven' && cfg.ekey && cfg.evoice){
+  if(cfg.tts === 'eleven' && cfg.ekey){
+    const vid = voiceFor(k,'eleven');
+    if(!vid){ setStatus('bad','ElevenLabs: no voice assigned'); return null; }
     try {
-      const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+cfg.evoice, {
+      const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+vid, {
         method:'POST',
         headers:{ 'content-type':'application/json', 'xi-api-key': cfg.ekey },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, voice_settings:{ stability: rec.rate && rec.rate < .9 ? .55 : .38, similarity_boost:.8 } })
       });
       if(r.ok){ setStatus('ok','Voice: ElevenLabs ready'); return URL.createObjectURL(await r.blob()); }
       setStatus('bad','ElevenLabs: '+r.status+', using built-in');
@@ -631,10 +695,12 @@ function deliver(text, url, done, pv){
     djAudio.play().catch(finish);
     setTimeout(finish, 45000);
   } else if(synth && bvoices.length){
+    const rec = VOICE[voiceKey] || {};
     const u = new SpeechSynthesisUtterance(text);
-    const v = bvoices.find(x => x.voiceURI === cfg.bvoice);
+    const v = browserVoiceFor(voiceKey);
     if(v) u.voice = v;
-    u.rate = .95;
+    u.rate  = rec.rate  || .95;
+    u.pitch = rec.pitch || 1;
     u.onend = finish;
     u.onerror = finish;
     synth.speak(u);
@@ -810,10 +876,11 @@ async function next(){
 
         const speaking = every && (played % every === 0);
         if(speaking){
+          voiceKey = cfg.pkey;
           fadeTo(Math.round(volume * DUCK), 700);
           let line, url;
           if(upcoming && upcoming.id === id){ line = upcoming.line; url = upcoming.url; upcoming = null; }
-          else { line = await claudeLine(titles[id], prevTitle); url = await synthesize(line); }
+          else { line = await claudeLine(titles[id], prevTitle); url = await synthesize(line, cfg.pkey); }
           deliver(line, url, () => { fadeTo(volume, 2200, prefetch); });
         } else {
           fadeTo(volume, 1500, prefetch);
@@ -835,7 +902,7 @@ async function prefetch(){
   const id = choose();
   if(!id || !titles[id]) return;
   const line = await claudeLine(titles[id], current ? titles[current] : null);
-  const url  = await synthesize(line);
+  const url  = await synthesize(line, cfg.pkey);
   upcoming = { id, line, url };
 }
 
@@ -941,22 +1008,28 @@ async function audition(key){
   djAudio.pause();
   talking = false;
   document.body.classList.remove('talking');
+  voiceKey = key;
   const ducking = ready && current && document.body.classList.contains('playing');
   if(ducking) fadeTo(Math.round(volume * DUCK), 400);
   $('#previewtext').textContent = 'auditioning…';
   $('#preview').hidden = false;
-  const url = await synthesize(text);
+  const url = await synthesize(text, key);
   deliver(text, url, () => { if(ducking) fadeTo(volume, 1400); }, true);
 }
 
 document.querySelectorAll('[data-persona]').forEach(b => {
-  b.setAttribute('aria-pressed', PERSONAS[b.dataset.persona] === cfg.persona);
+  b.setAttribute('aria-pressed', b.dataset.persona === cfg.pkey);
   b.onclick = () => {
-    cfg.persona = PERSONAS[b.dataset.persona];
+    const k = b.dataset.persona;
+    cfg.persona = PERSONAS[k];
+    cfg.pkey = k;
+    voiceKey = k;
     $('#persona').value = cfg.persona;
     store.set('persona', cfg.persona);
+    store.set('pkey', k);
     document.querySelectorAll('[data-persona]').forEach(x => x.setAttribute('aria-pressed', x === b));
-    audition(b.dataset.persona);
+    fillVoices();
+    audition(k);
   };
 });
 
@@ -970,11 +1043,17 @@ $('#amodel').onchange = e => { cfg.model = e.target.value; store.set('model', cf
 
 function fillVoices(){
   const sel = $('#tvoice');
+  const k = cfg.pkey;
+  $('#tvoicelabel').textContent = 'Voice for ' + (NAMES[k] || 'this host');
   sel.innerHTML = '';
   let opts = [], cur = '';
-  if(cfg.tts === 'browser'){ opts = bvoices.map(v => [v.voiceURI, v.name.replace(/\s*\(.*\)/,'')]); cur = cfg.bvoice; }
-  if(cfg.tts === 'openai'){ opts = OPENAI_VOICES.map(v => [v, v]); cur = cfg.ovoice; }
-  if(cfg.tts === 'eleven'){ opts = evoices.map(v => [v.id, v.name]); cur = cfg.evoice; }
+  if(cfg.tts === 'browser'){
+    opts = bvoices.map(v => [v.voiceURI, v.name.replace(/\s*\(.*\)/,'')]);
+    const v = browserVoiceFor(k);
+    cur = v ? v.voiceURI : '';
+  }
+  if(cfg.tts === 'openai'){ opts = OPENAI_VOICES.map(v => [v, v]); cur = voiceFor(k,'openai'); }
+  if(cfg.tts === 'eleven'){ opts = evoices.map(v => [v.id, v.name]); cur = voiceFor(k,'eleven'); }
   if(!opts.length){
     sel.innerHTML = '<option>' + (cfg.tts === 'eleven' ? 'Add a key to load voices' : 'No voices available') + '</option>';
     return;
@@ -988,10 +1067,11 @@ function fillVoices(){
   sel.value = cur || opts[0][0];
 }
 $('#tvoice').onchange = e => {
-  const v = e.target.value;
-  if(cfg.tts === 'browser'){ cfg.bvoice = v; store.set('bvoice', v); }
-  if(cfg.tts === 'openai'){ cfg.ovoice = v; store.set('ovoice', v); }
-  if(cfg.tts === 'eleven'){ cfg.evoice = v; store.set('evoice', v); }
+  const k = cfg.pkey;
+  if(!cfg.voices[k]) cfg.voices[k] = {};
+  cfg.voices[k][cfg.tts] = e.target.value;
+  store.set('voices', cfg.voices);
+  audition(k);
 };
 
 function syncTTS(){
@@ -1019,7 +1099,8 @@ $('#test').onclick = async () => {
   const wasDucked = ready && current;
   if(wasDucked) fadeTo(Math.round(volume*DUCK), 500);
   setStatus('', 'speaking…');
-  const url = await synthesize(line);
+  voiceKey = cfg.pkey;
+  const url = await synthesize(line, cfg.pkey);
   deliver(line, url, () => {
     if(wasDucked) fadeTo(volume, 1800);
     setStatus(cfg.akey ? 'ok' : '', cfg.akey ? 'Booth ready' : 'offline · using built-in patter');
