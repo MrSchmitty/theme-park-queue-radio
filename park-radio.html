@@ -168,6 +168,12 @@
   .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   @media (max-width:560px){ .two{grid-template-columns:1fr} }
 
+  .designtext{
+    background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:8px;
+    padding:13px 15px;font-size:13px;line-height:1.6;color:var(--dim);
+  }
+  .designlink{font-size:12px;color:var(--mint);margin-left:14px;text-decoration:none}
+  .designlink:hover{text-decoration:underline}
   .status{font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:var(--dimmer)}
   .status.ok{color:var(--mint)}
   .status.bad{color:var(--rose)}
@@ -321,6 +327,13 @@
         </div>
       </div>
 
+      <div class="field" id="designbox">
+        <label id="designlabel">Voice Design prompt</label>
+        <div class="designtext" id="designtext"></div>
+        <button class="btn ghost" id="copydesign" style="margin-top:10px">Copy prompt</button>
+        <a class="designlink" href="https://elevenlabs.io/app/voice-lab" target="_blank" rel="noopener">Open Voice Design &rarr;</a>
+      </div>
+
       <div class="row" style="margin-top:6px">
         <button class="btn" id="test">Test the booth</button>
         <button class="btn ghost" id="clearkeys">Clear keys</button>
@@ -410,25 +423,44 @@ const NAMES = {
    rate and pitch do the heavy lifting on iOS where the voice list is short. */
 const VOICE = {
   mansion:  { prefer:['Daniel','Arthur','Google UK English Male','Alex'], rate:.76, pitch:.75,
-              openai:'onyx',    direct:"Slow, sepulchral, and impeccably genteel. Long pauses. Velvet menace under perfect courtesy. Never rush a line." },
+              openai:'onyx',    direct:"Slow, sepulchral, and impeccably genteel. Long pauses. Velvet menace under perfect courtesy. Never rush a line.",
+              design:"An elderly British gentleman in his seventies with a deep, resonant voice that carries a hollow, cavernous quality. Aristocratic Received Pronunciation, impeccably polite. Speaks very slowly with long deliberate pauses, a faint smile audible beneath every word. Dry funereal warmth, as though delivering grim news he finds mildly amusing. Clean studio recording with a hint of large-room air." },
+
   skipper:  { prefer:['Aaron','Fred','Google US English','Alex'], rate:1.12, pitch:1.05,
-              openai:'verse',   direct:"Brisk, deadpan, faintly bored. Toss the punchline away rather than selling it. No laughing at your own joke." },
+              openai:'verse',   direct:"Brisk, deadpan, faintly bored. Toss the punchline away rather than selling it. No laughing at your own joke.",
+              design:"An American man in his late twenties with a bright, slightly nasal and reedy timbre. Flat neutral American accent. Fast clipped delivery with deadpan comic timing, throwing lines away rather than selling them. Perpetually unimpressed and faintly bored, yet somehow energetic. Close-mic, dry studio recording." },
+
   dungeon:  { prefer:['Arthur','Daniel','Gordon','Alex'], rate:.88, pitch:.6,
-              openai:'ash',     direct:"Low, gravelly, conspiratorial. Half-whispered, as if avoiding a guard. Rough around the edges." },
+              openai:'ash',     direct:"Low, gravelly, conspiratorial. Half-whispered, as if avoiding a guard. Rough around the edges.",
+              design:"A gruff man in his fifties with a hoarse, gravel-scraped voice worn down from years of shouting over wind and water. Rough rural West Country English accent with a rolling seafaring lilt. Low volume, conspiratorial, half-whispered as though avoiding a guard, with a wheezy laugh lurking beneath the words. Damp, stone-walled room tone." },
+
   mining:   { prefer:['Alex','Fred','Aaron'], rate:.9, pitch:.8,
-              openai:'echo',    direct:"Weathered and plainspoken. Flat prairie cadence, unhurried, matter-of-fact about hardship." },
+              openai:'echo',    direct:"Weathered and plainspoken. Flat prairie cadence, unhurried, matter-of-fact about hardship.",
+              design:"A weathered American man in his sixties with a dry, dusty, low rasp. Rural western American accent, unhurried plainspoken cadence, flat and level. Matter-of-fact about danger and faintly fatalistic. Speaks like a man reading a posted notice aloud to people who already know the news. Slightly thin and distant, as if through an old camp loudspeaker." },
+
   bayou:    { prefer:['Nicky','Samantha','Karen'], rate:.92, pitch:1,
-              openai:'coral',   direct:"Warm, easy, front-porch drawl. Unhurried and welcoming, like talking over music." },
+              openai:'coral',   direct:"Warm, easy, front-porch drawl. Unhurried and welcoming, like talking over music.",
+              design:"A man in his fifties from southern Louisiana with a rich gravel-and-honey voice and an easy Creole-inflected drawl. Unhurried, musical rise and fall, a generous laugh sitting in the throat. Speaks like a host welcoming friends up onto a porch. Relaxed pacing, warm close recording with natural room tone." },
+
   bellhop:  { prefer:['Arthur','Daniel','Alex'], rate:.84, pitch:.85,
-              openai:'ballad',  direct:"Clipped, formal, unnervingly calm. Perfect diction. Deliver unsettling details as routine housekeeping." },
+              openai:'ballad',  direct:"Clipped, formal, unnervingly calm. Perfect diction. Deliver unsettling details as routine housekeeping.",
+              design:"A crisp American man in his forties with a smooth mid-century transatlantic polish. Precise diction, formal and clipped, unnaturally calm. Every sentence delivered at the same measured tempo regardless of content, so alarming details arrive sounding like routine housekeeping. Clean, lightly compressed vintage recording." },
+
   starport: { prefer:['Karen','Serena','Martha','Google UK English Female'], rate:1.1, pitch:1.18,
-              openai:'shimmer', direct:"Bright, crisp, over-articulated public address. Relentlessly pleasant. Slight synthetic polish." },
+              openai:'shimmer', direct:"Bright, crisp, over-articulated public address. Relentlessly pleasant. Slight synthetic polish.",
+              design:"A bright woman in her thirties with a clear, forward, over-articulated public-address delivery. Neutral British accent with a faint synthetic sheen. Relentlessly pleasant, brisk pacing, gentle upward inflection at the end of each announcement. Sounds recorded in a clean booth for a transit terminal." },
+
   outfitter:{ prefer:['Rishi','Moira','Daniel'], rate:.95, pitch:.9,
-              openai:'sage',    direct:"Calm, kind, seasoned. Steady radio delivery with a little distance on it, as if over a weak signal." },
+              openai:'sage',    direct:"Calm, kind, seasoned. Steady radio delivery with a little distance on it, as if over a weak signal.",
+              design:"A calm man in his fifties with a warm, lightly weathered voice and Nepali-accented English. Measured, kind, and patient, with the steadiness of someone giving instructions that genuinely matter. Unhurried delivery, slight thinness and compression as though heard over a weak two-way radio signal." },
+
   studio:   { prefer:['Samantha','Victoria','Nicky'], rate:1.18, pitch:1.1,
-              openai:'nova',    direct:"Fast, breezy, mid-task. Casual and a little distracted, like someone talking while typing." },
+              openai:'nova',    direct:"Fast, breezy, mid-task. Casual and a little distracted, like someone talking while typing.",
+              design:"A woman in her late twenties with a bright, quick voice and a light vocal fry. Contemporary southern Californian accent. Breezy, casual and slightly distracted, as if talking while doing something else with her hands. Fast pacing, warm but offhand. Dry, close studio recording." },
+
   fair:     { prefer:['Alex','Arthur','Daniel'], rate:.82, pitch:.9,
-              openai:'fable',   direct:"Grand, warm, mid-century newsreel. Total sincerity, rising conviction, generous pauses before big claims." }
+              openai:'fable',   direct:"Grand, warm, mid-century newsreel. Total sincerity, rising conviction, generous pauses before big claims.",
+              design:"A grand American man in his fifties with a rich, burnished baritone and a mid-century newsreel transatlantic accent. Slow swelling delivery with generous pauses before important phrases, building conviction as a sentence goes on. Boundless civic sincerity and optimism, entirely without irony. Warm, gently tape-saturated vintage recording." }
 };
 
 const store = {
@@ -1045,6 +1077,8 @@ function fillVoices(){
   const sel = $('#tvoice');
   const k = cfg.pkey;
   $('#tvoicelabel').textContent = 'Voice for ' + (NAMES[k] || 'this host');
+  $('#designlabel').textContent = 'Voice Design prompt — ' + (NAMES[k] || 'this host');
+  $('#designtext').textContent = (VOICE[k] || {}).design || '';
   sel.innerHTML = '';
   let opts = [], cur = '';
   if(cfg.tts === 'browser'){
@@ -1105,6 +1139,22 @@ $('#test').onclick = async () => {
     if(wasDucked) fadeTo(volume, 1800);
     setStatus(cfg.akey ? 'ok' : '', cfg.akey ? 'Booth ready' : 'offline · using built-in patter');
   });
+};
+
+$('#copydesign').onclick = async () => {
+  const text = (VOICE[cfg.pkey] || {}).design || '';
+  const btn = $('#copydesign');
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = 'Copied';
+  } catch(e){
+    const r = document.createRange();
+    r.selectNodeContents($('#designtext'));
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
+    btn.textContent = 'Selected — copy it';
+  }
+  setTimeout(()=>{ btn.textContent = 'Copy prompt'; }, 2200);
 };
 
 $('#clearkeys').onclick = () => {
