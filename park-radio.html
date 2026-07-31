@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Park Radio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Monoton&family=Jost:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10122B;
+    --surface:#191C3D;
+    --line:rgba(242,237,227,.14);
+    --glow:#FFC15E;
+    --mint:#7FE0C7;
+    --rose:#FF7B9C;
+    --paper:#F2EDE3;
+    --dim:rgba(242,237,227,.55);
+    --dimmer:rgba(242,237,227,.32);
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #2A2054 0%, rgba(42,32,84,0) 60%),
+      radial-gradient(800px 500px at 90% 110%, #1B3350 0%, rgba(27,51,80,0) 65%),
+      var(--ink);
+    background-attachment:fixed;
+    color:var(--paper);
+    font-family:'Jost',system-ui,-apple-system,sans-serif;
+    font-weight:300;
+    min-height:100vh;
+    padding:24px 18px 64px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px;margin:0 auto}
+
+  /* ---------- signature: marquee bulb strip ---------- */
+  .marquee{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:14px 0 18px}
+  .bulb{
+    width:9px;height:9px;border-radius:50%;
+    background:rgba(255,193,94,.18);
+    animation:chase 1.6s linear infinite;
+    animation-play-state:paused;
+    transition:opacity .5s;
+  }
+  body.playing .bulb{animation-play-state:running}
+  body.talking .bulb{opacity:.3}
+  @keyframes chase{
+    0%,72%{background:rgba(255,193,94,.16);box-shadow:none}
+    12%{background:var(--glow);box-shadow:0 0 10px rgba(255,193,94,.9),0 0 22px rgba(255,193,94,.45)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .bulb{animation:none}
+    body.playing .bulb{background:var(--glow);box-shadow:0 0 8px rgba(255,193,94,.6)}
+  }
+
+  /* ---------- wordmark ---------- */
+  header{text-align:center;margin-bottom:30px}
+  h1{
+    font-family:'Monoton',cursive;
+    font-size:clamp(30px,7.5vw,52px);
+    font-weight:400;margin:0;letter-spacing:.02em;
+    color:var(--glow);
+    text-shadow:0 0 18px rgba(255,193,94,.35),0 0 46px rgba(255,193,94,.18);
+    line-height:1.25;
+  }
+  .tag{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--dimmer);margin-top:12px;font-weight:400}
+
+  /* ---------- player ---------- */
+  .card{
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+    border:1px solid var(--line);border-radius:var(--r);
+    padding:22px;margin-bottom:18px;
+  }
+  .screen{
+    position:relative;width:100%;aspect-ratio:16/9;
+    border-radius:10px;overflow:hidden;
+    background:#0A0B1C;border:1px solid var(--line);margin-bottom:20px;
+  }
+  .screen iframe{position:absolute;inset:0;width:100%;height:100%;border:0;opacity:.5}
+  .screen::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 50%,rgba(16,18,43,0) 30%,rgba(16,18,43,.85) 100%);
+  }
+  .veil{
+    position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+    background:rgba(10,11,28,.92);padding:20px;z-index:2;
+    font-size:14px;color:var(--dim);line-height:1.6;
+  }
+  .veil[hidden]{display:none}
+  .veil code{
+    font-family:'Space Mono',monospace;font-size:12px;color:var(--mint);
+    background:rgba(127,224,199,.1);padding:2px 6px;border-radius:4px;
+    display:inline-block;margin-top:6px;
+  }
+
+  .eyebrow{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--mint);font-weight:500;margin-bottom:8px}
+  .title{font-size:clamp(19px,3.4vw,25px);font-weight:400;line-height:1.32;margin:0 0 6px;color:var(--paper)}
+  .sub{font-size:13px;color:var(--dim);letter-spacing:.04em;min-height:19px}
+
+  .bar{height:3px;background:rgba(242,237,227,.12);border-radius:2px;margin:20px 0 8px;overflow:hidden;cursor:pointer}
+  .bar i{display:block;height:100%;width:0;background:var(--glow);border-radius:2px;transition:width .4s linear}
+  .times{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:11px;color:var(--dimmer)}
+
+  .controls{display:flex;align-items:center;justify-content:center;gap:18px;margin:24px 0 4px}
+  button{font-family:inherit;cursor:pointer;color:var(--paper);background:none;border:none}
+  button:focus-visible,.chip:focus-visible,.bar:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--mint);outline-offset:3px;border-radius:6px;
+  }
+  .skip{
+    width:44px;height:44px;border-radius:50%;border:1px solid var(--line);
+    display:grid;place-items:center;font-size:15px;color:var(--dim);
+    transition:border-color .2s,color .2s;
+  }
+  .skip:hover{border-color:var(--glow);color:var(--glow)}
+  .play{
+    width:70px;height:70px;border-radius:50%;background:var(--glow);color:#10122B;
+    display:grid;place-items:center;font-size:24px;
+    box-shadow:0 0 34px rgba(255,193,94,.3);transition:transform .18s,box-shadow .2s;
+  }
+  .play:hover{transform:scale(1.05);box-shadow:0 0 46px rgba(255,193,94,.45)}
+  .play:active{transform:scale(.97)}
+
+  .dj{
+    display:flex;align-items:flex-start;gap:11px;
+    background:rgba(127,224,199,.09);border:1px solid rgba(127,224,199,.28);
+    border-radius:10px;padding:13px 15px;margin-top:20px;
+    font-size:14px;line-height:1.55;color:var(--paper);
+  }
+  .dj[hidden]{display:none}
+  .dj b{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--mint);font-weight:600;white-space:nowrap;padding-top:3px}
+
+  /* ---------- rows / chips ---------- */
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .rowlabel{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dimmer);width:100%;margin:18px 0 2px;font-weight:500}
+  .chip{
+    font-family:inherit;font-size:12.5px;letter-spacing:.06em;padding:7px 14px;border-radius:100px;
+    border:1px solid var(--line);background:none;color:var(--dim);cursor:pointer;transition:all .18s;
+  }
+  .chip:hover{border-color:rgba(242,237,227,.35);color:var(--paper)}
+  .chip[aria-pressed="true"]{background:var(--glow);border-color:var(--glow);color:#10122B;font-weight:500}
+  .chip.mint[aria-pressed="true"]{background:var(--mint);border-color:var(--mint)}
+  select.chip{color:var(--paper);background:var(--surface)}
+  input[type=range]{accent-color:var(--glow);width:130px}
+
+  /* ---------- panels ---------- */
+  details{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px}
+  summary{
+    padding:16px 20px;cursor:pointer;list-style:none;
+    font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary:hover{color:var(--paper)}
+  .panel{padding:0 20px 22px}
+
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer);margin-bottom:6px}
+  .field input,.field select,.field textarea{
+    width:100%;padding:11px 14px;border-radius:8px;border:1px solid var(--line);
+    background:rgba(0,0,0,.25);color:var(--paper);font-family:inherit;font-size:14px;
+  }
+  .field textarea{resize:vertical;min-height:62px;line-height:1.5}
+  .field input::placeholder,.field textarea::placeholder{color:var(--dimmer)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){ .two{grid-template-columns:1fr} }
+
+  .status{font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:var(--dimmer)}
+  .status.ok{color:var(--mint)}
+  .status.bad{color:var(--rose)}
+
+  .btn{padding:11px 20px;border-radius:8px;background:var(--mint);color:#10122B;font-size:13px;font-weight:500;letter-spacing:.06em}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--dim)}
+  .btn.ghost:hover{border-color:var(--rose);color:var(--rose)}
+
+  .add{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .add input[type=text]{
+    flex:1;min-width:200px;padding:11px 14px;border-radius:8px;border:1px solid var(--line);
+    background:rgba(0,0,0,.25);color:var(--paper);font-family:inherit;font-size:14px;
+  }
+  .add input::placeholder{color:var(--dimmer)}
+  .src{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .src span{color:var(--dim)}
+  .src .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kind{
+    font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 7px;border-radius:4px;background:rgba(255,193,94,.14);color:var(--glow);white-space:nowrap;
+  }
+  .kind.pl{background:rgba(255,123,156,.14);color:var(--rose)}
+  .del{color:var(--dimmer);font-size:17px;padding:0 4px;line-height:1}
+  .del:hover{color:var(--rose)}
+  .note{font-size:12.5px;color:var(--dimmer);line-height:1.65;margin-top:18px}
+  .note a{color:var(--mint)}
+  .warn{border-left:2px solid var(--rose);padding-left:12px;margin:16px 0 0;font-size:12.5px;color:var(--dim);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="marquee" id="marquee" aria-hidden="true"></div>
+
+  <header>
+    <h1>Park Radio</h1>
+    <div class="tag">Area loops &middot; all night &middot; no requests</div>
+  </header>
+
+  <div class="card">
+    <div class="screen">
+      <div id="player"></div>
+      <div class="veil" id="veil" hidden>
+        <div>
+          <span id="veiltext">The player didn't start. This page needs to be served over http rather than opened straight from a file.</span><br>
+          <code>python3 -m http.server 8000</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="eyebrow" id="eyebrow">Off air</div>
+    <h2 class="title" id="title">Press play to open the park</h2>
+    <div class="sub" id="sub"></div>
+
+    <div class="bar" id="bar" role="slider" tabindex="0" aria-label="Seek"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="fill"></i></div>
+    <div class="times"><span id="tcur">00:00</span><span id="tend">00:00</span></div>
+
+    <div class="controls">
+      <button class="skip" id="back" title="Restart track" aria-label="Restart track">&#9198;</button>
+      <button class="play" id="play" aria-label="Play">&#9654;</button>
+      <button class="skip" id="next" title="Next track" aria-label="Next track">&#9197;</button>
+    </div>
+
+    <div class="dj" id="dj" hidden><b>On air</b><span id="djtext"></span></div>
+
+    <div class="row">
+      <div class="rowlabel">Segment length</div>
+      <button class="chip" data-seg="0" aria-pressed="false">Full loop</button>
+      <button class="chip" data-seg="600" aria-pressed="true">10 min</button>
+      <button class="chip" data-seg="1200" aria-pressed="false">20 min</button>
+      <button class="chip" data-seg="1800" aria-pressed="false">30 min</button>
+    </div>
+
+    <div class="row">
+      <div class="rowlabel">DJ breaks</div>
+      <button class="chip mint" data-every="0" aria-pressed="false">Never</button>
+      <button class="chip mint" data-every="1" aria-pressed="true">Every track</button>
+      <button class="chip mint" data-every="2" aria-pressed="false">Every 2nd</button>
+      <button class="chip mint" data-every="4" aria-pressed="false">Every 4th</button>
+      <span style="display:flex;align-items:center;gap:9px;font-size:12px;color:var(--dimmer)">
+        Vol <input type="range" id="vol" min="0" max="100" value="70" aria-label="Volume">
+      </span>
+    </div>
+
+    <div class="row">
+      <div class="rowlabel">Sleep timer</div>
+      <button class="chip" data-sleep="0" aria-pressed="true">Off</button>
+      <button class="chip" data-sleep="30" aria-pressed="false">30 min</button>
+      <button class="chip" data-sleep="60" aria-pressed="false">60 min</button>
+      <button class="chip" data-sleep="90" aria-pressed="false">90 min</button>
+      <span id="sleepleft" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--glow)"></span>
+    </div>
+  </div>
+
+  <!-- ================= booth ================= -->
+  <details id="boothpanel">
+    <summary><span>Booth</span><span class="status" id="boothstatus">offline &middot; using built-in voice</span></summary>
+    <div class="panel">
+
+      <div class="field">
+        <label for="persona">DJ character</label>
+        <textarea id="persona" placeholder="Describe the voice you want between tracks"></textarea>
+      </div>
+      <div class="row" style="margin-bottom:20px">
+        <button class="chip" data-persona="mansion">Mansion host</button>
+        <button class="chip" data-persona="skipper">Dock skipper</button>
+        <button class="chip" data-persona="dungeon">Dungeon pirate</button>
+        <button class="chip" data-persona="mining">Mine foreman</button>
+        <button class="chip" data-persona="bayou">Bayou hall</button>
+        <button class="chip" data-persona="bellhop">Night bellhop</button>
+        <button class="chip" data-persona="starport">Starport gate</button>
+        <button class="chip" data-persona="outfitter">Trek outfitter</button>
+        <button class="chip" data-persona="studio">Studio desk</button>
+        <button class="chip" data-persona="fair">Fair narrator</button>
+      </div>
+      <div class="dj" id="preview" hidden style="margin:-8px 0 20px"><b>Audition</b><span id="previewtext"></span></div>
+
+      <div class="two">
+        <div class="field">
+          <label for="akey">Anthropic API key</label>
+          <input type="password" id="akey" placeholder="sk-ant-..." autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="amodel">Model</label>
+          <select id="amodel">
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fastest, cheapest</option>
+            <option value="claude-sonnet-5">Sonnet 5 — better writing</option>
+            <option value="claude-opus-5">Opus 5 — best writing</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Voice</label>
+        <div class="row">
+          <button class="chip mint" data-tts="browser" aria-pressed="true">Built-in</button>
+          <button class="chip mint" data-tts="openai" aria-pressed="false">OpenAI</button>
+          <button class="chip mint" data-tts="eleven" aria-pressed="false">ElevenLabs</button>
+        </div>
+      </div>
+
+      <div class="two">
+        <div class="field" id="ttskeyfield" hidden>
+          <label for="tkey" id="tkeylabel">TTS API key</label>
+          <input type="password" id="tkey" placeholder="key" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="tvoice">Voice name</label>
+          <select id="tvoice"></select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="test">Test the booth</button>
+        <button class="btn ghost" id="clearkeys">Clear keys</button>
+      </div>
+
+      <div class="warn">
+        Keys are stored in this browser's local storage in plain text. That's fine for a file on
+        your own machine &mdash; don't upload this page anywhere public with keys saved in it.
+        A DJ break costs a fraction of a cent on Haiku; ElevenLabs and OpenAI bill separately for audio.
+      </div>
+    </div>
+  </details>
+
+  <!-- ================= library ================= -->
+  <details>
+    <summary><span>Library</span><span class="status" id="count">&mdash;</span></summary>
+    <div class="panel">
+      <div class="add">
+        <input type="text" id="url" placeholder="Paste a YouTube video or playlist link">
+        <button class="btn" id="addbtn">Add</button>
+      </div>
+      <div id="list"></div>
+      <div class="note">
+        Playlists get expanded into their individual videos the first time they load, so a
+        single link can feed the station for weeks. Everything is saved in this browser only.
+        Nothing is downloaded &mdash; tracks stream from YouTube's own player.
+        <br><br>
+        <a href="https://www.youtube.com/results?search_query=disney+park+background+music+loop" target="_blank" rel="noopener">Find more loops on YouTube &rarr;</a>
+      </div>
+    </div>
+  </details>
+
+</div>
+
+<script>
+/* ==================================================================
+   Park Radio — personal theme park music station
+   ================================================================== */
+
+const SEED = [
+  {id:'QGdeBShy2u8', type:'video',    name:'Main Street U.S.A. loop — Magic Kingdom'},
+  {id:'ngrKjKVscVY', type:'video',    name:'Main Street U.S.A. area music — Magic Kingdom'},
+  {id:'6vLjNXY92HA', type:'video',    name:'Main Street U.S.A. full source loop'},
+  {id:'4f79yYj4XEQ', type:'video',    name:'EPCOT entrance & World Celebration loop'},
+  {id:'9E-l9qYiqxQ', type:'video',    name:'Disneyland & DCA esplanade loop'},
+  {id:'zOeGO1Zf4qY', type:'video',    name:'Main Street Christmas loop — Magic Kingdom'},
+  {id:'kZ2njU3ERdk', type:'video',    name:'Main Street holiday area loop'},
+  {id:'PL9E5B1432BD618517', type:'playlist', name:'Disney Parks Music Loops (playlist)'},
+  {id:'PLC8uR2aN6Z9E3PsJm8YJz4YOJtSfi-2Kt', type:'playlist', name:'Disney Music Loops (playlist)'},
+  {id:'PLNpnGdQLTMduezixWIp0G8anJKX8hSukN', type:'playlist', name:'EPCOT parks music (playlist)'}
+];
+
+const PERSONAS = {
+  mansion: "The resident host of a haunted estate, speaking to a guest who has wandered into the portrait gallery. Sepulchral, impeccably courteous, mock-ominous. Welcome them warmly and imply, politely, that leaving may not be an option. Treat each loop as another room of the house. Grave humor delivered perfectly straight — never wink at it.",
+  skipper: "A boat skipper filling air on the dock radio between departures. Deadpan, relentless punster, total commitment to the groaner. Build a pun off whatever the track title hands you and move on before anyone can react. Address the listener as a passenger. Your material must be original — never recycle jokes the actual attraction uses.",
+  dungeon: "A weathered buccaneer calling up from a stone cell somewhere below the waterline. Salt-cured, conspiratorial, treats the listener as a fellow prisoner or a passing scoundrel worth recruiting. Nautical vocabulary, dark good humor, mock-threats delivered with obvious affection.",
+  mining:  "The foreman of a gold rush mining company reading the day's dispatch over the camp speaker. Dusty, plainspoken, quietly superstitious about the mountain. Refer to tracks as shifts, hauls, or veins. Warn about weather and rockslides that never quite arrive.",
+  bayou:   "A bayou storyteller running a riverside music hall. Warm, unhurried, full of front-porch charm. Talk about the water, the cypress, the heat, and the band. Introduce each loop like a set at a good club where everyone already knows each other.",
+  bellhop: "The night bellhop at a grand hotel that has seen something it will not discuss. Formal, clipped, unnervingly calm. Announce tracks the way you'd announce floors. Imply the storm outside is worse than it looks and that the elevators have been temperamental.",
+  starport:"A spaceport gate announcer at a terminal that never closes. Bright, clipped, faintly bureaucratic. Frame each track as a departure, a boarding call, or a gate change. Cheerful about delays. Boundless mid-century optimism about the future.",
+  outfitter:"A trekking outfitter working the wireless from a tea house at altitude. Weathered, kind, matter-of-fact about danger. Mention weather on the pass and rumors drifting down from the higher camps. Treat the listener as a client who has already paid and cannot turn back.",
+  studio:  "The front desk at a record label's studio, working the night shift. Fast, breezy, name-drops sessions and mixes happening down the hall. Treat every loop as a track someone is cutting right now. Slightly harried, very Los Angeles.",
+  fair:    "The narrator of a World's Fair pavilion film, circa the mid-1960s. Warm, portentous, boundlessly optimistic about tomorrow. Grand claims about progress delivered with total sincerity. Speak in 'we' — a whole civilization moving forward together."
+};
+
+/* One original line per host, so you can audition a voice with no API key. */
+const DEMOS = {
+  mansion:  "Do come in. The gallery is rather full this evening, but I'm certain we can find room for one more.",
+  skipper:  "Afternoon, folks. We've got a full boat, a leaky engine, and absolutely no plan. Sit back and enjoy the delay.",
+  dungeon:  "Psst. Down here, through the bars. Ye've got the look of someone who'd help an honest man find his keys.",
+  mining:   "Dispatch from the mountain. Wind's up on the ridge and the north vein's holding, so we'll run the next shift regardless.",
+  bayou:    "Come on in, water's high and the band's already warm. Pull a chair up by the rail and you can hear the cypress from there.",
+  bellhop:  "Good evening. The lobby is quiet, the storm has not moved, and the service elevator is behaving itself. For now.",
+  starport: "Attention travelers, departures are running on schedule, more or less. Proceed to your gate and mind the artificial gravity.",
+  outfitter:"Radio check from base camp. Pass is clear, weather turns by evening, and the porters say the ridge has been noisy. Pay it no mind.",
+  studio:   "Hey — front desk. Studio B's been going since noon on something with a lot of strings. Grab a seat, they're nearly through.",
+  fair:     "Tomorrow is not a distant country. It is a place we are building together, one bright and orderly day at a time."
+};
+
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem('parkradio.'+k); return v===null?d:JSON.parse(v);}catch(e){return d} },
+  set(k,v){ try{ localStorage.setItem('parkradio.'+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem('parkradio.'+k); }catch(e){} }
+};
+
+let sources  = store.get('sources', SEED);
+let expanded = store.get('expanded', {});
+let titles   = store.get('titles', {});
+let dead     = store.get('dead', []);
+let segment  = store.get('segment', 600);
+let every    = store.get('every', 1);
+let volume   = store.get('vol', 70);
+
+const cfg = {
+  akey:    store.get('akey', ''),
+  model:   store.get('model', 'claude-haiku-4-5-20251001'),
+  tts:     store.get('tts', 'browser'),
+  okey:    store.get('okey', ''),
+  ekey:    store.get('ekey', ''),
+  bvoice:  store.get('bvoice', ''),
+  ovoice:  store.get('ovoice', 'ash'),
+  evoice:  store.get('evoice', ''),
+  persona: store.get('persona', PERSONAS.mansion)
+};
+
+let player, ready = false, current = null, played = 0;
+let history = [], recentLines = [], segTimer = null, sleepAt = 0, talking = false;
+let upcoming = null;          // { id, line, url }
+let fadeTimer = null, watchdog = null;
+
+/* Only cry wolf if the player really never starts. */
+function armWatchdog(){
+  clearTimeout(watchdog);
+  watchdog = setTimeout(()=>{
+    if(!document.body.classList.contains('playing')) $('#veil').hidden = false;
+  }, 9000);
+}
+
+const $ = s => document.querySelector(s);
+const DUCK = 0.22;            // music level under the DJ
+
+/* ---------------- marquee ---------------- */
+const mq = $('#marquee');
+for(let i=0;i<24;i++){
+  const b = document.createElement('div');
+  b.className = 'bulb';
+  b.style.animationDelay = (i*0.066)+'s';
+  mq.appendChild(b);
+}
+
+/* ---------------- title tidying ---------------- */
+function cleanTitle(t){
+  if(!t) return "an area loop";
+  return t
+    .replace(/\s*[\(\[][^)\]]*(hd|hq|4k|1080p|full|extended|loop|remaster|re-?creation)[^)\]]*[\)\]]/gi,'')
+    .replace(/\s*\|\s*/g,' — ')
+    .replace(/\s*-\s*(youtube|official)\s*$/i,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
+/* ---------------- offline fallback patter ---------------- */
+const OPENERS = ["Coming up next,","Rolling into","Here comes","Next on the loop,","Settling in with","Up now,","Easing into","And now,"];
+const CLOSERS = ["Stay a while.","Take your time with this one.","No rush to be anywhere.","The park's yours tonight.","Let it run.","Nice and slow.","Enjoy the walk."];
+const SCENE = {
+  night:   ["The lamps are on and the crowds have thinned out.","It's after dark, so this one glows a little.","Late hours in the park now."],
+  morning: ["Rope drop energy on this one.","Gates are open and the streets are still empty.","Sun's barely over the berm."],
+  day:     ["Full sun, high traffic, popcorn in the air.","Middle of the day and the queues are stretching out."],
+  holiday: ["Garlands are up for this one.","The holiday overlay's running.","Tinsel on Main Street tonight."]
+};
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+function fallbackLine(title){
+  const t = cleanTitle(title), h = new Date().getHours();
+  let scene;
+  if(/christmas|holiday|merry|jingle|yuletide|noel/i.test(t)) scene = pick(SCENE.holiday);
+  else if(h < 11) scene = pick(SCENE.morning);
+  else if(h < 17) scene = pick(SCENE.day);
+  else scene = pick(SCENE.night);
+  const bits = [scene, pick(OPENERS)+" "+t+"."];
+  if(Math.random() < .6) bits.push(pick(CLOSERS));
+  if(Math.random() < .35) bits.push(bits.shift());
+  return bits.join(" ");
+}
+
+/* ---------------- Claude ---------------- */
+const SYSTEM = `You are the between-track voice of a private internet radio station that plays nothing but Disney theme park background music: area loops, queue music, parade and fireworks scores, resort lobby loops.
+
+Write ONE spoken radio break. Rules:
+- One or two sentences. Under 45 words. It gets read aloud, so write for the ear.
+- Plain text only. No emoji, no stage directions, no quotation marks around the whole line, no markdown.
+- Name the track naturally. The YouTube titles are often messy — say what a human would say, not the raw filename.
+- Never quote song lyrics, ride narration, or any scripted park dialogue. Describe, don't reproduce.
+- Never invent facts you aren't sure of. Atmosphere is always safer than a claimed date or composer.
+- Vary your openings. You'll be told what you said recently; don't reuse those shapes.
+- There is one listener and they've heard a station ID a thousand times. Don't over-explain.`;
+
+async function claudeLine(title, prevTitle){
+  if(!cfg.akey) return fallbackLine(title);
+  const now = new Date();
+  const ctx = [
+    `Track starting now: ${cleanTitle(title)}`,
+    prevTitle ? `Track that just finished: ${cleanTitle(prevTitle)}` : `This is the first track of the session.`,
+    `Listener's local time: ${now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} on ${now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}`,
+    `DJ character: ${cfg.persona}`,
+    recentLines.length ? `Your last few breaks (do not echo these):\n- ${recentLines.slice(-5).join('\n- ')}` : ''
+  ].filter(Boolean).join('\n');
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'x-api-key': cfg.akey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        max_tokens: 200,
+        system: SYSTEM,
+        messages:[{ role:'user', content: ctx }]
+      })
+    });
+    if(!r.ok){
+      const e = await r.json().catch(()=>({}));
+      setStatus('bad', 'Claude: ' + (e.error && e.error.message ? e.error.message.slice(0,60) : r.status));
+      return fallbackLine(title);
+    }
+    const data = await r.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim();
+    if(!text) return fallbackLine(title);
+    setStatus('ok', 'Claude: connected');
+    recentLines.push(text);
+    if(recentLines.length > 8) recentLines.shift();
+    return text;
+  } catch(err){
+    setStatus('bad', 'Claude: network error');
+    return fallbackLine(title);
+  }
+}
+
+/* ---------------- text to speech ---------------- */
+const synth = window.speechSynthesis;
+let bvoices = [];
+
+function loadBrowserVoices(){
+  if(!synth) return;
+  bvoices = synth.getVoices().filter(v => /^en/i.test(v.lang));
+  if(!cfg.bvoice && bvoices.length){
+    const nice = bvoices.find(v => /samantha|google us|daniel|karen|serena/i.test(v.name));
+    cfg.bvoice = (nice || bvoices[0]).voiceURI;
+  }
+  if(cfg.tts === 'browser') fillVoices();
+}
+if(synth){ loadBrowserVoices(); synth.onvoiceschanged = loadBrowserVoices; }
+
+const OPENAI_VOICES = ['alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer','verse'];
+let evoices = [];
+
+async function loadElevenVoices(){
+  if(!cfg.ekey) return;
+  try {
+    const r = await fetch('https://api.elevenlabs.io/v1/voices', { headers:{ 'xi-api-key': cfg.ekey } });
+    if(!r.ok){ setStatus('bad','ElevenLabs: key rejected'); return; }
+    const d = await r.json();
+    evoices = (d.voices||[]).map(v => ({ id:v.voice_id, name:v.name }));
+    if(!cfg.evoice && evoices.length) cfg.evoice = evoices[0].id;
+    fillVoices();
+  } catch(e){ setStatus('bad','ElevenLabs: network error'); }
+}
+
+/* Returns an object URL for spoken audio, or null to use the browser voice. */
+async function synthesize(text){
+  if(cfg.tts === 'openai' && cfg.okey){
+    for(const model of ['gpt-4o-mini-tts','tts-1']){
+      try {
+        const r = await fetch('https://api.openai.com/v1/audio/speech', {
+          method:'POST',
+          headers:{ 'content-type':'application/json', 'authorization':'Bearer '+cfg.okey },
+          body: JSON.stringify({ model, voice: cfg.ovoice, input: text })
+        });
+        if(r.ok){ setStatus('ok','Voice: OpenAI ready'); return URL.createObjectURL(await r.blob()); }
+        if(r.status === 401){ setStatus('bad','OpenAI: key rejected'); return null; }
+      } catch(e){ /* try next model, then fall through */ }
+    }
+    setStatus('bad','OpenAI: voice unavailable, using built-in');
+    return null;
+  }
+  if(cfg.tts === 'eleven' && cfg.ekey && cfg.evoice){
+    try {
+      const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+cfg.evoice, {
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'xi-api-key': cfg.ekey },
+        body: JSON.stringify({ text })
+      });
+      if(r.ok){ setStatus('ok','Voice: ElevenLabs ready'); return URL.createObjectURL(await r.blob()); }
+      setStatus('bad','ElevenLabs: '+r.status+', using built-in');
+    } catch(e){ setStatus('bad','ElevenLabs: network error'); }
+  }
+  return null;
+}
+
+const djAudio = new Audio();
+
+/* Speak a line over the ducked music, then hand back control. */
+function deliver(text, url, done, pv){
+  const box = $(pv ? '#preview' : '#dj');
+  const txt = $(pv ? '#previewtext' : '#djtext');
+  talking = true;
+  document.body.classList.add('talking');
+  txt.textContent = text;
+  box.hidden = false;
+
+  const finish = () => {
+    if(!talking) return;
+    talking = false;
+    document.body.classList.remove('talking');
+    if(url) URL.revokeObjectURL(url);
+    setTimeout(()=>{ if(!talking) box.hidden = true; }, pv ? 14000 : 8000);
+    done();
+  };
+
+  if(url){
+    djAudio.src = url;
+    djAudio.onended = finish;
+    djAudio.onerror = finish;
+    djAudio.play().catch(finish);
+    setTimeout(finish, 45000);
+  } else if(synth && bvoices.length){
+    const u = new SpeechSynthesisUtterance(text);
+    const v = bvoices.find(x => x.voiceURI === cfg.bvoice);
+    if(v) u.voice = v;
+    u.rate = .95;
+    u.onend = finish;
+    u.onerror = finish;
+    synth.speak(u);
+    setTimeout(()=>{ if(talking){ try{synth.cancel()}catch(e){} finish(); } }, 30000);
+  } else {
+    setTimeout(finish, Math.min(9000, 1400 + text.length * 55));
+  }
+}
+
+/* ---------------- YouTube ---------------- */
+const tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+document.head.appendChild(tag);
+
+window.onYouTubeIframeAPIReady = function(){
+  player = new YT.Player('player', {
+    height:'100%', width:'100%',
+    playerVars:{ controls:0, disablekb:1, modestbranding:1, rel:0, playsinline:1, iv_load_policy:3 },
+    events:{
+      onReady: () => { ready = true; player.setVolume(volume); expandPlaylists(); },
+      onStateChange: onState,
+      onError: onError
+    }
+  });
+};
+
+function onError(e){
+  if([2,5,100,101,150].includes(e.data)){
+    if(current && !dead.includes(current)){ dead.push(current); store.set('dead', dead); }
+    next();
+  } else {
+    $('#veil').hidden = false;
+  }
+}
+
+function onState(e){
+  if(e.data === YT.PlayerState.PLAYING){
+    document.body.classList.add('playing');
+    $('#play').innerHTML = '&#10074;&#10074;';
+    $('#play').setAttribute('aria-label','Pause');
+    clearTimeout(watchdog);
+    $('#veil').hidden = true;
+    const d = player.getVideoData();
+    if(d && d.title){
+      $('#title').textContent = cleanTitle(d.title);
+      if(current && titles[current] !== d.title){ titles[current] = d.title; store.set('titles', titles); }
+    }
+  }
+  if(e.data === YT.PlayerState.PAUSED){
+    document.body.classList.remove('playing');
+    $('#play').innerHTML = '&#9654;';
+    $('#play').setAttribute('aria-label','Play');
+  }
+  if(e.data === YT.PlayerState.ENDED){ next(); }
+}
+
+/* ---- expand playlists into video ids, no API key needed ---- */
+function expandPlaylists(){
+  const todo = sources.filter(s => s.type === 'playlist' && !expanded[s.id]);
+  if(!todo.length) return;
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
+  document.body.appendChild(holder);
+  const slot = document.createElement('div');
+  holder.appendChild(slot);
+
+  let i = 0;
+  const loader = new YT.Player(slot, {
+    height:'1', width:'1', playerVars:{ playsinline:1 },
+    events:{ onReady: () => step() }
+  });
+
+  function step(){
+    if(i >= todo.length){ store.set('expanded', expanded); render(); return; }
+    const pl = todo[i++];
+    try { loader.cuePlaylist({ list: pl.id, listType:'playlist' }); }
+    catch(e){ return step(); }
+    let tries = 0;
+    const poll = setInterval(()=>{
+      let list = null;
+      try { list = loader.getPlaylist(); } catch(e){}
+      if(list && list.length){
+        clearInterval(poll);
+        expanded[pl.id] = list;
+        store.set('expanded', expanded);
+        render();
+        setTimeout(step, 400);
+      } else if(++tries > 25){
+        clearInterval(poll);
+        expanded[pl.id] = [];
+        setTimeout(step, 200);
+      }
+    }, 400);
+  }
+}
+
+function pool(){
+  const out = [];
+  sources.forEach(s => {
+    if(s.type === 'video') out.push(s.id);
+    else (expanded[s.id]||[]).forEach(v => out.push(v));
+  });
+  return [...new Set(out)].filter(id => !dead.includes(id));
+}
+
+function choose(){
+  const p = pool();
+  if(!p.length) return null;
+  let id, guard = 0;
+  do { id = p[Math.floor(Math.random()*p.length)]; }
+  while(p.length > 3 && history.slice(-3).includes(id) && ++guard < 20);
+  return id;
+}
+
+/* ---------------- volume fades ---------------- */
+function fadeTo(target, ms, cb){
+  if(!ready){ if(cb) cb(); return; }
+  clearInterval(fadeTimer);
+  const from = player.getVolume();
+  const steps = Math.max(1, Math.round(ms/50));
+  let n = 0;
+  fadeTimer = setInterval(()=>{
+    n++;
+    player.setVolume(Math.round(from + (target-from) * (n/steps)));
+    if(n >= steps){ clearInterval(fadeTimer); if(cb) cb(); }
+  }, 50);
+}
+
+/* ---------------- the transition ---------------- */
+async function next(){
+  if(!ready) return;
+  clearTimeout(segTimer);
+  try{ synth && synth.cancel(); }catch(e){}
+  djAudio.pause();
+  talking = false;
+  document.body.classList.remove('talking');
+
+  const id = choose();
+  if(!id){
+    $('#eyebrow').textContent = 'Empty library';
+    $('#title').textContent = 'Add a YouTube link below to start the station';
+    return;
+  }
+
+  const prevTitle = current ? titles[current] : null;
+  const wasPlaying = player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING;
+
+  const start = () => {
+    current = id;
+    history.push(id);
+    played++;
+
+    $('#eyebrow').textContent = 'Now playing';
+    $('#title').textContent = titles[id] ? cleanTitle(titles[id]) : 'Cueing…';
+    $('#sub').textContent = '';
+
+    player.cueVideoById(id);
+    player.setVolume(0);
+
+    let tries = 0;
+    const wait = setInterval(async ()=>{
+      const d = player.getVideoData();
+      const dur = player.getDuration() || 0;
+      if((d && d.title && dur) || ++tries > 14){
+        clearInterval(wait);
+        if(d && d.title){ titles[id] = d.title; store.set('titles', titles); }
+
+        if(segment && dur > segment * 1.5){
+          player.seekTo(Math.floor(Math.random() * (dur - segment)), true);
+          $('#sub').textContent = 'Joined in progress';
+        }
+        player.playVideo();
+
+        const speaking = every && (played % every === 0);
+        if(speaking){
+          fadeTo(Math.round(volume * DUCK), 700);
+          let line, url;
+          if(upcoming && upcoming.id === id){ line = upcoming.line; url = upcoming.url; upcoming = null; }
+          else { line = await claudeLine(titles[id], prevTitle); url = await synthesize(line); }
+          deliver(line, url, () => { fadeTo(volume, 2200, prefetch); });
+        } else {
+          fadeTo(volume, 1500, prefetch);
+        }
+
+        if(segment) segTimer = setTimeout(next, segment*1000);
+      }
+    }, 300);
+  };
+
+  if(wasPlaying) fadeTo(0, 1400, start);
+  else start();
+}
+
+/* Generate the next break early when we already know the track's title. */
+async function prefetch(){
+  if(!every || !cfg.akey) return;
+  if(upcoming) return;
+  const id = choose();
+  if(!id || !titles[id]) return;
+  const line = await claudeLine(titles[id], current ? titles[current] : null);
+  const url  = await synthesize(line);
+  upcoming = { id, line, url };
+}
+
+/* ---------------- transport ---------------- */
+$('#play').onclick = () => {
+  if(!ready){ $('#veil').hidden = false; return; }
+  armWatchdog();
+  if(!current){ next(); return; }
+  if(player.getPlayerState() === YT.PlayerState.PLAYING) player.pauseVideo();
+  else player.playVideo();
+};
+$('#next').onclick = () => next();
+$('#back').onclick = () => { if(ready && current) player.seekTo(0, true); };
+
+$('#bar').onclick = e => {
+  if(!ready || !current) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  player.seekTo(player.getDuration() * ((e.clientX - r.left)/r.width), true);
+};
+
+document.addEventListener('keydown', e => {
+  if(/input|select|textarea/i.test(e.target.tagName)) return;
+  if(e.code === 'Space'){ e.preventDefault(); $('#play').click(); }
+  if(e.code === 'ArrowRight'){ next(); }
+});
+
+/* ---------------- ticker ---------------- */
+const fmt = s => {
+  s = Math.max(0, Math.floor(s||0));
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  const p = n => String(n).padStart(2,'0');
+  return h ? `${h}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
+};
+setInterval(()=>{
+  if(ready && current && player.getDuration){
+    const c = player.getCurrentTime()||0, d = player.getDuration()||0;
+    $('#tcur').textContent = fmt(c);
+    $('#tend').textContent = fmt(d);
+    const pct = d ? (c/d*100) : 0;
+    $('#fill').style.width = pct+'%';
+    $('#bar').setAttribute('aria-valuenow', Math.round(pct));
+  }
+  if(sleepAt){
+    const left = sleepAt - Date.now();
+    if(left <= 0){
+      sleepAt = 0;
+      $('#sleepleft').textContent = '';
+      if(ready) fadeTo(0, 8000, ()=>{ player.pauseVideo(); player.setVolume(volume); });
+      document.querySelectorAll('[data-sleep]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sleep === '0'));
+    } else {
+      $('#sleepleft').textContent = fmt(left/1000) + ' left';
+    }
+  }
+}, 1000);
+
+/* ---------------- settings wiring ---------------- */
+function setStatus(kind, msg){
+  const el = $('#boothstatus');
+  el.className = 'status ' + kind;
+  el.textContent = msg;
+}
+
+document.querySelectorAll('[data-seg]').forEach(b => {
+  b.setAttribute('aria-pressed', +b.dataset.seg === segment);
+  b.onclick = () => {
+    segment = +b.dataset.seg; store.set('segment', segment);
+    document.querySelectorAll('[data-seg]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    clearTimeout(segTimer);
+    if(segment && current) segTimer = setTimeout(next, segment*1000);
+  };
+});
+
+document.querySelectorAll('[data-every]').forEach(b => {
+  b.setAttribute('aria-pressed', +b.dataset.every === every);
+  b.onclick = () => {
+    every = +b.dataset.every; store.set('every', every);
+    document.querySelectorAll('[data-every]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  };
+});
+
+document.querySelectorAll('[data-sleep]').forEach(b => {
+  b.onclick = () => {
+    const m = +b.dataset.sleep;
+    sleepAt = m ? Date.now() + m*60000 : 0;
+    if(!m) $('#sleepleft').textContent = '';
+    document.querySelectorAll('[data-sleep]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  };
+});
+
+$('#vol').value = volume;
+$('#vol').oninput = e => {
+  volume = +e.target.value; store.set('vol', volume);
+  if(ready && !talking) player.setVolume(volume);
+};
+
+/* --- booth fields --- */
+$('#persona').value = cfg.persona;
+$('#persona').oninput = e => { cfg.persona = e.target.value; store.set('persona', cfg.persona); };
+async function audition(key){
+  const text = DEMOS[key];
+  if(!text) return;
+  try{ synth && synth.cancel(); }catch(e){}
+  djAudio.pause();
+  talking = false;
+  document.body.classList.remove('talking');
+  const ducking = ready && current && document.body.classList.contains('playing');
+  if(ducking) fadeTo(Math.round(volume * DUCK), 400);
+  $('#previewtext').textContent = 'auditioning…';
+  $('#preview').hidden = false;
+  const url = await synthesize(text);
+  deliver(text, url, () => { if(ducking) fadeTo(volume, 1400); }, true);
+}
+
+document.querySelectorAll('[data-persona]').forEach(b => {
+  b.setAttribute('aria-pressed', PERSONAS[b.dataset.persona] === cfg.persona);
+  b.onclick = () => {
+    cfg.persona = PERSONAS[b.dataset.persona];
+    $('#persona').value = cfg.persona;
+    store.set('persona', cfg.persona);
+    document.querySelectorAll('[data-persona]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    audition(b.dataset.persona);
+  };
+});
+
+$('#akey').value = cfg.akey;
+$('#akey').oninput = e => {
+  cfg.akey = e.target.value.trim(); store.set('akey', cfg.akey);
+  setStatus('', cfg.akey ? 'Claude: key saved, untested' : 'offline · using built-in patter');
+};
+$('#amodel').value = cfg.model;
+$('#amodel').onchange = e => { cfg.model = e.target.value; store.set('model', cfg.model); };
+
+function fillVoices(){
+  const sel = $('#tvoice');
+  sel.innerHTML = '';
+  let opts = [], cur = '';
+  if(cfg.tts === 'browser'){ opts = bvoices.map(v => [v.voiceURI, v.name.replace(/\s*\(.*\)/,'')]); cur = cfg.bvoice; }
+  if(cfg.tts === 'openai'){ opts = OPENAI_VOICES.map(v => [v, v]); cur = cfg.ovoice; }
+  if(cfg.tts === 'eleven'){ opts = evoices.map(v => [v.id, v.name]); cur = cfg.evoice; }
+  if(!opts.length){
+    sel.innerHTML = '<option>' + (cfg.tts === 'eleven' ? 'Add a key to load voices' : 'No voices available') + '</option>';
+    return;
+  }
+  opts.forEach(([val,label]) => {
+    const o = document.createElement('option');
+    o.value = val; o.textContent = label;
+    if(val === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.value = cur || opts[0][0];
+}
+$('#tvoice').onchange = e => {
+  const v = e.target.value;
+  if(cfg.tts === 'browser'){ cfg.bvoice = v; store.set('bvoice', v); }
+  if(cfg.tts === 'openai'){ cfg.ovoice = v; store.set('ovoice', v); }
+  if(cfg.tts === 'eleven'){ cfg.evoice = v; store.set('evoice', v); }
+};
+
+function syncTTS(){
+  document.querySelectorAll('[data-tts]').forEach(x => x.setAttribute('aria-pressed', x.dataset.tts === cfg.tts));
+  const kf = $('#ttskeyfield');
+  kf.hidden = (cfg.tts === 'browser');
+  if(cfg.tts === 'openai'){ $('#tkeylabel').textContent = 'OpenAI API key'; $('#tkey').value = cfg.okey; $('#tkey').placeholder = 'sk-...'; }
+  if(cfg.tts === 'eleven'){ $('#tkeylabel').textContent = 'ElevenLabs API key'; $('#tkey').value = cfg.ekey; $('#tkey').placeholder = 'xi-...'; }
+  fillVoices();
+  if(cfg.tts === 'eleven' && cfg.ekey && !evoices.length) loadElevenVoices();
+}
+document.querySelectorAll('[data-tts]').forEach(b => {
+  b.onclick = () => { cfg.tts = b.dataset.tts; store.set('tts', cfg.tts); syncTTS(); };
+});
+$('#tkey').oninput = e => {
+  const v = e.target.value.trim();
+  if(cfg.tts === 'openai'){ cfg.okey = v; store.set('okey', v); }
+  if(cfg.tts === 'eleven'){ cfg.ekey = v; store.set('ekey', v); if(v.length > 20) loadElevenVoices(); }
+};
+
+$('#test').onclick = async () => {
+  setStatus('', 'writing a break…');
+  const t = current ? titles[current] : 'Main Street U.S.A. area music loop';
+  const line = await claudeLine(t, null);
+  const wasDucked = ready && current;
+  if(wasDucked) fadeTo(Math.round(volume*DUCK), 500);
+  setStatus('', 'speaking…');
+  const url = await synthesize(line);
+  deliver(line, url, () => {
+    if(wasDucked) fadeTo(volume, 1800);
+    setStatus(cfg.akey ? 'ok' : '', cfg.akey ? 'Booth ready' : 'offline · using built-in patter');
+  });
+};
+
+$('#clearkeys').onclick = () => {
+  ['akey','okey','ekey'].forEach(k => { cfg[k] = ''; store.del(k); });
+  $('#akey').value = ''; $('#tkey').value = '';
+  evoices = [];
+  syncTTS();
+  setStatus('', 'keys cleared · using built-in patter');
+};
+
+/* ---------------- library ---------------- */
+function parse(url){
+  const u = url.trim();
+  let m = u.match(/[?&]list=([A-Za-z0-9_-]+)/);
+  if(m) return { id:m[1], type:'playlist' };
+  m = u.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+  if(m) return { id:m[1], type:'video' };
+  if(/^[A-Za-z0-9_-]{11}$/.test(u)) return { id:u, type:'video' };
+  if(/^PL[A-Za-z0-9_-]+$/.test(u)) return { id:u, type:'playlist' };
+  return null;
+}
+
+function render(){
+  const list = $('#list');
+  list.innerHTML = '';
+  sources.forEach((s, i) => {
+    const n = s.type === 'playlist' ? (expanded[s.id] ? expanded[s.id].length + ' tracks' : 'loading…') : '';
+    const row = document.createElement('div');
+    row.className = 'src';
+    const k = document.createElement('span');
+    k.className = 'kind' + (s.type === 'playlist' ? ' pl' : '');
+    k.textContent = s.type === 'playlist' ? 'list' : 'track';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = s.name || s.id;
+    nm.title = s.name || s.id;
+    const ct = document.createElement('span');
+    ct.className = 'status';
+    ct.textContent = n;
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.innerHTML = '&times;';
+    del.title = 'Remove';
+    del.setAttribute('aria-label','Remove ' + (s.name || s.id));
+    del.onclick = () => { sources.splice(i,1); store.set('sources', sources); render(); };
+    row.append(k, nm, ct, del);
+    list.appendChild(row);
+  });
+  $('#count').textContent = pool().length + ' tracks';
+}
+
+$('#addbtn').onclick = () => {
+  const p = parse($('#url').value);
+  const box = $('#url');
+  if(!p){ box.value = ''; box.placeholder = 'That link didn\u2019t contain a video or playlist ID'; return; }
+  if(sources.some(s => s.id === p.id)){ box.value = ''; box.placeholder = 'Already in the library'; return; }
+  sources.push({ id:p.id, type:p.type, name: p.type === 'playlist' ? 'Playlist ' + p.id.slice(0,8) : 'Track ' + p.id });
+  store.set('sources', sources);
+  box.value = '';
+  box.placeholder = 'Paste a YouTube video or playlist link';
+  render();
+  if(p.type === 'playlist' && ready) expandPlaylists();
+};
+$('#url').addEventListener('keydown', e => { if(e.key === 'Enter') $('#addbtn').click(); });
+
+/* ---------------- boot ---------------- */
+syncTTS();
+render();
+setStatus(cfg.akey ? 'ok' : '', cfg.akey ? 'Claude: key saved' : 'offline · using built-in patter');
+</script>
+</body>
+</html>
