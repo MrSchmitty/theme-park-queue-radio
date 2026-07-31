@@ -214,7 +214,12 @@
   </header>
 
   <div class="card">
-    <div class="screen">
+    <div class="row" style="margin:-4px 0 18px">
+      <button class="chip" data-channel="youtube" aria-pressed="true">YouTube loops</button>
+      <button class="chip" data-channel="spotify" aria-pressed="false">Spotify playlist</button>
+    </div>
+
+    <div class="screen" data-ytonly>
       <div id="player"></div>
       <div class="veil" id="veil" hidden>
         <div>
@@ -240,7 +245,7 @@
 
     <div class="dj" id="dj" hidden><b>On air</b><span id="djtext"></span></div>
 
-    <div class="row">
+    <div class="row" data-ytonly>
       <div class="rowlabel">Segment length</div>
       <button class="chip" data-seg="0" aria-pressed="false">Full loop</button>
       <button class="chip" data-seg="600" aria-pressed="true">10 min</button>
@@ -357,8 +362,59 @@
     </div>
   </details>
 
+  <!-- ================= spotify ================= -->
+  <details id="sppanel">
+    <summary><span>Spotify</span><span class="status" id="spstatus">not connected</span></summary>
+    <div class="panel">
+
+      <div class="field">
+        <label for="spcid">Client ID</label>
+        <input type="text" id="spcid" placeholder="from developer.spotify.com dashboard" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label>Redirect URI — paste this into your Spotify app settings</label>
+        <div class="designtext" id="spredirect" style="font-family:'Space Mono',monospace;font-size:11.5px;word-break:break-all"></div>
+        <button class="btn ghost" id="spcopyredirect" style="margin-top:10px">Copy redirect URI</button>
+      </div>
+
+      <div class="row" style="margin-bottom:18px">
+        <button class="btn" id="spconnect">Connect Spotify</button>
+        <button class="btn ghost" id="sprefresh">Refresh lists</button>
+      </div>
+
+      <div class="two">
+        <div class="field">
+          <label for="spplaylist">Playlist</label>
+          <select id="spplaylist"><option>Connect to load your playlists</option></select>
+        </div>
+        <div class="field">
+          <label for="spdevice">Play on</label>
+          <select id="spdevice"><option value="">Open Spotify on your phone, then refresh</option></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn ghost" id="spreload">Reload tracks</button>
+        <span class="status" id="spcount">&mdash;</span>
+      </div>
+
+      <div class="note">
+        Park Radio doesn't play the audio itself here &mdash; it directs the Spotify app on your
+        phone, which is what makes lock-screen playback work. Keep Spotify installed and signed in,
+        and open it once so it appears in the device list.
+      </div>
+
+      <div class="warn">
+        Setup, once: create an app at developer.spotify.com/dashboard, paste the redirect URI above
+        into its settings, copy the Client ID here, then Connect. Your account must be added to the
+        app's user allowlist under Settings &rarr; User Management. Requires Premium.
+      </div>
+    </div>
+  </details>
+
   <!-- ================= library ================= -->
-  <details>
+  <details data-ytonly>
     <summary><span>Library</span><span class="status" id="count">&mdash;</span></summary>
     <div class="panel">
       <div class="add">
@@ -487,6 +543,7 @@ let segment  = store.get('segment', 600);
 let every    = store.get('every', 1);
 let volume   = store.get('vol', 70);
 let shaping  = store.get('shaping', true);
+let channel  = store.get('channel', 'youtube');
 
 const cfg = {
   akey:    store.get('akey', ''),
@@ -511,6 +568,7 @@ let fadeTimer = null, watchdog = null, voiceKey = cfg.pkey;
 function armWatchdog(){
   clearTimeout(watchdog);
   watchdog = setTimeout(()=>{
+    if(channel !== 'youtube') return;
     if(!document.body.classList.contains('playing')) $('#veil').hidden = false;
   }, 9000);
 }
@@ -918,7 +976,7 @@ function fadeTo(target, ms, cb){
 }
 
 /* ---------------- the transition ---------------- */
-async function next(){
+async function ytNext(){
   if(!ready) return;
   clearTimeout(segTimer);
   try{ synth && synth.cancel(); }catch(e){}
@@ -983,6 +1041,12 @@ async function next(){
   else start();
 }
 
+/* Route the station to whichever channel is on air. */
+async function next(){
+  if(channel === 'spotify') return spNext();
+  return ytNext();
+}
+
 /* Generate the next break early when we already know the track's title. */
 async function prefetch(){
   if(!every || !cfg.akey) return;
@@ -995,7 +1059,24 @@ async function prefetch(){
 }
 
 /* ---------------- transport ---------------- */
-$('#play').onclick = () => {
+$('#play').onclick = async () => {
+  if(channel === 'spotify'){
+    if(!sp.token){ spStatus('bad','Connect Spotify first'); return; }
+    if(!spNowUri){ spNext(); return; }
+    if(spState.playing){
+      await spApi('/me/player/pause', { method:'PUT' });
+      spState.playing = false;
+      document.body.classList.remove('playing');
+      $('#play').innerHTML = '&#9654;';
+    } else {
+      const q = sp.device ? '?device_id=' + encodeURIComponent(sp.device) : '';
+      await spApi('/me/player/play' + q, { method:'PUT' });
+      spState.playing = true;
+      document.body.classList.add('playing');
+      $('#play').innerHTML = '&#10074;&#10074;';
+    }
+    return;
+  }
   if(!ready){ $('#veil').hidden = false; return; }
   armWatchdog();
   if(!current){ next(); return; }
@@ -1003,12 +1084,21 @@ $('#play').onclick = () => {
   else player.playVideo();
 };
 $('#next').onclick = () => next();
-$('#back').onclick = () => { if(ready && current) player.seekTo(0, true); };
+$('#back').onclick = () => {
+  if(channel === 'spotify'){ if(spNowUri) spApi('/me/player/seek?position_ms=0', { method:'PUT' }); return; }
+  if(ready && current) player.seekTo(0, true);
+};
 
 $('#bar').onclick = e => {
-  if(!ready || !current) return;
   const r = e.currentTarget.getBoundingClientRect();
-  player.seekTo(player.getDuration() * ((e.clientX - r.left)/r.width), true);
+  const frac = (e.clientX - r.left)/r.width;
+  if(channel === 'spotify'){
+    if(spNowUri && spState.dur)
+      spApi('/me/player/seek?position_ms=' + Math.floor(spState.dur*frac), { method:'PUT' });
+    return;
+  }
+  if(!ready || !current) return;
+  player.seekTo(player.getDuration() * frac, true);
 };
 
 document.addEventListener('keydown', e => {
@@ -1025,7 +1115,17 @@ const fmt = s => {
   return h ? `${h}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
 };
 setInterval(()=>{
-  if(ready && current && player.getDuration){
+  if(channel === 'spotify'){
+    if(spNowUri){
+      if(spState.playing) spState.pos += 1000;
+      const c = spState.pos/1000, d = spState.dur/1000;
+      $('#tcur').textContent = fmt(c);
+      $('#tend').textContent = fmt(d);
+      const pct = d ? Math.min(100, c/d*100) : 0;
+      $('#fill').style.width = pct+'%';
+      $('#bar').setAttribute('aria-valuenow', Math.round(pct));
+    }
+  } else if(ready && current && player.getDuration){
     const c = player.getCurrentTime()||0, d = player.getDuration()||0;
     $('#tcur').textContent = fmt(c);
     $('#tend').textContent = fmt(d);
@@ -1038,7 +1138,14 @@ setInterval(()=>{
     if(left <= 0){
       sleepAt = 0;
       $('#sleepleft').textContent = '';
-      if(ready) fadeTo(0, 8000, ()=>{ player.pauseVideo(); player.setVolume(volume); });
+      if(channel === 'spotify'){
+        clearInterval(spPoll);
+        spApi('/me/player/pause', { method:'PUT' });
+        document.body.classList.remove('playing');
+        $('#play').innerHTML = '&#9654;';
+      } else if(ready){
+        fadeTo(0, 8000, ()=>{ player.pauseVideo(); player.setVolume(volume); });
+      }
       document.querySelectorAll('[data-sleep]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sleep === '0'));
     } else {
       $('#sleepleft').textContent = fmt(left/1000) + ' left';
@@ -1292,6 +1399,401 @@ $('#addbtn').onclick = () => {
   if(p.type === 'playlist' && ready) expandPlaylists();
 };
 $('#url').addEventListener('keydown', e => { if(e.key === 'Enter') $('#addbtn').click(); });
+
+
+/* ==================================================================
+   Spotify channel — Park Radio directs, the Spotify app plays
+   ================================================================== */
+
+const SP_SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative';
+
+const sp = {
+  cid:      store.get('sp_cid',''),
+  token:    store.get('sp_token',''),
+  refresh:  store.get('sp_refresh',''),
+  expires:  store.get('sp_expires',0),
+  plist:    store.get('sp_plist',''),
+  plname:   store.get('sp_plname',''),
+  device:   store.get('sp_device',''),
+  tracks:   store.get('sp_tracks',[])
+};
+
+let spNowUri = null, spPoll = null, spState = { pos:0, dur:0, playing:false }, spHistory = [], spBusy = false;
+
+function spSave(){
+  ['cid','token','refresh','expires','plist','plname','device','tracks']
+    .forEach(k => store.set('sp_'+k, sp[k]));
+}
+function spStatus(kind, msg){
+  const el = $('#spstatus');
+  if(el){ el.className = 'status ' + kind; el.textContent = msg; }
+}
+function redirectURI(){ return location.origin + location.pathname; }
+
+/* ---- PKCE, so no client secret ever lives in this file ---- */
+function b64url(buf){
+  let s = '';
+  new Uint8Array(buf).forEach(b => s += String.fromCharCode(b));
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function pkce(){
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+async function spLogin(){
+  if(!sp.cid){ spStatus('bad','Add your Client ID first'); return; }
+  if(location.protocol === 'file:'){ spStatus('bad','Needs to be served over https'); return; }
+  const { verifier, challenge } = await pkce();
+  sessionStorage.setItem('sp_verifier', verifier);
+  const u = new URL('https://accounts.spotify.com/authorize');
+  u.searchParams.set('client_id', sp.cid);
+  u.searchParams.set('response_type','code');
+  u.searchParams.set('redirect_uri', redirectURI());
+  u.searchParams.set('scope', SP_SCOPES);
+  u.searchParams.set('code_challenge_method','S256');
+  u.searchParams.set('code_challenge', challenge);
+  location.href = u.toString();
+}
+
+async function spToken(body){
+  const r = await fetch('https://accounts.spotify.com/api/token', {
+    method:'POST',
+    headers:{ 'content-type':'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(body)
+  });
+  if(!r.ok) throw new Error('token ' + r.status);
+  const d = await r.json();
+  sp.token = d.access_token;
+  if(d.refresh_token) sp.refresh = d.refresh_token;
+  sp.expires = Date.now() + (d.expires_in || 3600) * 1000 - 60000;
+  spSave();
+  return d;
+}
+
+/* Handle the redirect back from Spotify. */
+async function spCallback(){
+  const q = new URLSearchParams(location.search);
+  const code = q.get('code');
+  const err  = q.get('error');
+  if(err){ history.replaceState({},'',location.pathname); spStatus('bad','Spotify: ' + err); return; }
+  if(!code) return;
+  const verifier = sessionStorage.getItem('sp_verifier');
+  history.replaceState({},'',location.pathname);
+  if(!verifier) return;
+  try {
+    await spToken({ client_id:sp.cid, grant_type:'authorization_code', code,
+                    redirect_uri:redirectURI(), code_verifier:verifier });
+    sessionStorage.removeItem('sp_verifier');
+    spStatus('ok','Connected');
+    await spLoadPlaylists();
+    await spLoadDevices();
+  } catch(e){ spStatus('bad','Sign-in failed — check the redirect URI'); }
+}
+
+async function spEnsure(){
+  if(!sp.token) return false;
+  if(Date.now() < sp.expires) return true;
+  if(!sp.refresh) return false;
+  try {
+    await spToken({ client_id:sp.cid, grant_type:'refresh_token', refresh_token:sp.refresh });
+    return true;
+  } catch(e){ spStatus('bad','Session expired — connect again'); return false; }
+}
+
+async function spApi(path, opts){
+  if(!await spEnsure()) return null;
+  const r = await fetch('https://api.spotify.com/v1' + path, Object.assign({}, opts, {
+    headers: Object.assign({ 'authorization':'Bearer ' + sp.token, 'content-type':'application/json' },
+                           (opts && opts.headers) || {})
+  }));
+  if(r.status === 204) return null;
+  if(r.status === 401){ sp.expires = 0; if(await spEnsure()) return spApi(path, opts); return null; }
+  if(r.status === 403){ spStatus('bad','403 — is your account on the app allowlist?'); return null; }
+  if(r.status === 429){ spStatus('bad','Rate limited, easing off'); return null; }
+  if(!r.ok) return null;
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
+/* ---- playlists, devices ---- */
+async function spLoadPlaylists(){
+  const d = await spApi('/me/playlists?limit=50');
+  const sel = $('#spplaylist');
+  if(!d || !d.items){ return; }
+  sel.innerHTML = '';
+  d.items.forEach(pl => {
+    const o = document.createElement('option');
+    o.value = pl.id;
+    o.textContent = pl.name + ' (' + (pl.tracks ? pl.tracks.total : '?') + ')';
+    if(pl.id === sp.plist) o.selected = true;
+    sel.appendChild(o);
+  });
+  if(!sp.plist && d.items.length){ sp.plist = d.items[0].id; sp.plname = d.items[0].name; spSave(); }
+}
+
+async function spLoadDevices(){
+  const d = await spApi('/me/player/devices');
+  const sel = $('#spdevice');
+  sel.innerHTML = '';
+  const list = (d && d.devices) || [];
+  if(!list.length){
+    sel.innerHTML = '<option value="">Open Spotify on your phone, then refresh</option>';
+    return;
+  }
+  list.forEach(dev => {
+    const o = document.createElement('option');
+    o.value = dev.id;
+    o.textContent = dev.name + (dev.is_active ? ' — active' : '');
+    if(dev.id === sp.device || (!sp.device && dev.is_active)) o.selected = true;
+    sel.appendChild(o);
+  });
+  if(!sp.device){ const act = list.find(x => x.is_active) || list[0]; sp.device = act.id; spSave(); }
+}
+
+async function spLoadTracks(){
+  if(!sp.plist) return;
+  spStatus('', 'loading playlist…');
+  const out = [];
+  let url = '/playlists/' + sp.plist + '/tracks?limit=100&fields=next,items(track(uri,name,duration_ms,artists(name),album(name,release_date)))';
+  let guard = 0;
+  while(url && guard++ < 20){
+    const d = await spApi(url);
+    if(!d) break;
+    (d.items || []).forEach(it => {
+      const t = it && it.track;
+      if(!t || !t.uri || t.uri.indexOf('spotify:track:') !== 0) return;
+      out.push({
+        uri: t.uri,
+        name: t.name,
+        artist: (t.artists || []).map(a => a.name).join(', '),
+        album: t.album ? t.album.name : '',
+        year: t.album && t.album.release_date ? String(t.album.release_date).slice(0,4) : '',
+        ms: t.duration_ms || 0
+      });
+    });
+    url = d.next ? d.next.replace('https://api.spotify.com/v1','') : null;
+  }
+  sp.tracks = out;
+  spSave();
+  spStatus(out.length ? 'ok' : 'bad', out.length ? out.length + ' tracks ready' : 'No playable tracks found');
+  $('#spcount').textContent = out.length ? out.length + ' tracks' : '—';
+}
+
+/* ---- the Spotify DJ ---- */
+const SYSTEM_SP = `You are the between-track voice of a private radio station playing Disney music: park recordings, film scores, show tunes, and songs.
+
+For each track you receive real metadata — title, artist, album, year. Write ONE spoken radio break.
+
+Rules:
+- One or two sentences. Under 45 words. It is read aloud, so write for the ear.
+- Plain text only. No emoji, no markdown, no stage directions, no surrounding quotation marks.
+- NEVER quote or reproduce song lyrics, not even a single phrase, and never paraphrase a lyric closely enough to stand in for it. Talk about the song; never perform it.
+- Say where the song is from — the film, show, attraction, or park — only when you are genuinely confident. If you are unsure, say something atmospheric instead. A confident wrong attribution is much worse than none.
+- A park connection is welcome when it is real: which land you would hear it in, what time of day, what it plays over. Never invent attraction names, dates, composers, or opening years.
+- One witty or affectionate observation is plenty. Warmth over cleverness.
+- Vary your openings. You will be shown your recent breaks; do not reuse their shapes.
+- One listener, who knows this music well. Do not over-explain.`;
+
+async function spLine(t, prev){
+  if(!cfg.akey) return fallbackLine(t.name + ' — ' + t.artist);
+  const now = new Date();
+  const ctx = [
+    'Track starting now: "' + t.name + '" by ' + t.artist,
+    t.album ? 'Album: ' + t.album + (t.year ? ' (' + t.year + ')' : '') : '',
+    prev ? 'Track that just finished: "' + prev.name + '" by ' + prev.artist : 'First track of the session.',
+    'Listener local time: ' + now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) +
+      ' on ' + now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'}),
+    'DJ character: ' + cfg.persona,
+    recentLines.length ? 'Your recent breaks (do not echo):\n- ' + recentLines.slice(-5).join('\n- ') : ''
+  ].filter(Boolean).join('\n');
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', 'x-api-key':cfg.akey,
+                'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:cfg.model, max_tokens:200, system:SYSTEM_SP,
+                             messages:[{ role:'user', content:ctx }] })
+    });
+    if(!r.ok){ setStatus('bad','Claude: ' + r.status); return fallbackLine(t.name); }
+    const d = await r.json();
+    const text = (d.content||[]).filter(b => b.type==='text').map(b => b.text).join(' ').trim();
+    if(!text) return fallbackLine(t.name);
+    setStatus('ok','Claude: connected');
+    recentLines.push(text);
+    if(recentLines.length > 8) recentLines.shift();
+    return text;
+  } catch(e){ setStatus('bad','Claude: network error'); return fallbackLine(t.name); }
+}
+
+/* ---- playback ---- */
+function spPick(){
+  const list = sp.tracks;
+  if(!list.length) return null;
+  let t, guard = 0;
+  do { t = list[Math.floor(Math.random()*list.length)]; }
+  while(list.length > 3 && spHistory.slice(-3).includes(t.uri) && ++guard < 20);
+  return t;
+}
+
+async function spPlayUri(uri){
+  const q = sp.device ? '?device_id=' + encodeURIComponent(sp.device) : '';
+  await spApi('/me/player/play' + q, { method:'PUT', body: JSON.stringify({ uris:[uri] }) });
+}
+
+async function spNext(){
+  if(spBusy) return;
+  spBusy = true;
+  clearTimeout(segTimer);
+  try{ synth && synth.cancel(); }catch(e){}
+  djAudio.pause();
+  talking = false;
+  document.body.classList.remove('talking');
+
+  try {
+    if(!sp.tracks.length){
+      $('#eyebrow').textContent = 'No playlist';
+      $('#title').textContent = 'Pick a playlist in the Spotify panel';
+      return;
+    }
+    const t = spPick();
+    if(!t) return;
+    const prev = spNowUri ? sp.tracks.find(x => x.uri === spNowUri) : null;
+
+    played++;
+    const speaking = every && (played % every === 0);
+
+    /* Spotify's volume endpoint isn't available on iOS, so the break is
+       delivered in the gap rather than over a duck. */
+    if(speaking){
+      voiceKey = cfg.pkey;
+      $('#eyebrow').textContent = 'Booth';
+      $('#title').textContent = t.name;
+      $('#sub').textContent = t.artist;
+      await spApi('/me/player/pause', { method:'PUT' }).catch(()=>{});
+      let line, url;
+      if(upcoming && upcoming.uri === t.uri){ line = upcoming.line; url = upcoming.url; upcoming = null; }
+      else { line = await spLine(t, prev); url = await synthesize(line, cfg.pkey); }
+      await new Promise(res => deliver(line, url, res));
+    }
+
+    spNowUri = t.uri;
+    spHistory.push(t.uri);
+    spState = { pos:0, dur:t.ms, playing:true };
+    $('#eyebrow').textContent = 'Now playing';
+    $('#title').textContent = t.name;
+    $('#sub').textContent = t.artist + (t.year ? ' · ' + t.year : '');
+    document.body.classList.add('playing');
+    $('#play').innerHTML = '&#10074;&#10074;';
+
+    await spPlayUri(t.uri);
+    spWatch();
+    spPrefetch();
+  } finally { spBusy = false; }
+}
+
+/* Poll playback and roll on when the track finishes. */
+function spWatch(){
+  clearInterval(spPoll);
+  spPoll = setInterval(async ()=>{
+    if(channel !== 'spotify' || talking) return;
+    const d = await spApi('/me/player');
+    if(!d){ return; }
+    spState.pos = d.progress_ms || 0;
+    spState.dur = (d.item && d.item.duration_ms) || spState.dur;
+    spState.playing = !!d.is_playing;
+    if(d.is_playing){
+      document.body.classList.add('playing');
+      $('#play').innerHTML = '&#10074;&#10074;';
+    } else {
+      document.body.classList.remove('playing');
+      $('#play').innerHTML = '&#9654;';
+    }
+    const left = spState.dur - spState.pos;
+    if(spState.dur && left < 2500 && d.is_playing) spNext();
+    if(!d.is_playing && spState.dur && spState.pos === 0 && spNowUri) { /* stopped at end */ }
+  }, 3000);
+}
+
+async function spPrefetch(){
+  if(!every || !cfg.akey || upcoming) return;
+  const t = spPick();
+  if(!t) return;
+  const prev = spNowUri ? sp.tracks.find(x => x.uri === spNowUri) : null;
+  const line = await spLine(t, prev);
+  const url  = await synthesize(line, cfg.pkey);
+  upcoming = { uri: t.uri, line, url };
+}
+
+/* ---- panel wiring ---- */
+$('#spcid').value = sp.cid;
+$('#spcid').oninput = e => { sp.cid = e.target.value.trim(); spSave(); };
+$('#spconnect').onclick = () => spLogin();
+$('#spredirect').textContent = redirectURI();
+$('#spcopyredirect').onclick = async () => {
+  const b = $('#spcopyredirect');
+  try { await navigator.clipboard.writeText(redirectURI()); b.textContent = 'Copied'; }
+  catch(e){ b.textContent = 'Select it above'; }
+  setTimeout(()=>{ b.textContent = 'Copy redirect URI'; }, 2200);
+};
+$('#spplaylist').onchange = e => {
+  sp.plist = e.target.value;
+  sp.plname = e.target.selectedOptions[0] ? e.target.selectedOptions[0].textContent : '';
+  sp.tracks = []; spSave();
+  spLoadTracks();
+};
+$('#spdevice').onchange = e => { sp.device = e.target.value; spSave(); };
+$('#sprefresh').onclick = async () => { await spLoadPlaylists(); await spLoadDevices(); spStatus('ok','Refreshed'); };
+$('#spreload').onclick = () => spLoadTracks();
+
+function syncChannelUI(){
+  document.querySelectorAll('[data-ytonly]').forEach(el => { el.hidden = (channel !== 'youtube'); });
+}
+
+document.querySelectorAll('[data-channel]').forEach(b => {
+  b.setAttribute('aria-pressed', b.dataset.channel === channel);
+  b.onclick = async () => {
+    if(channel === b.dataset.channel) return;
+    channel = b.dataset.channel;
+    store.set('channel', channel);
+    document.querySelectorAll('[data-channel]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    upcoming = null;
+    clearInterval(spPoll);
+    clearTimeout(segTimer);
+    try{ synth && synth.cancel(); }catch(e){}
+    document.body.classList.remove('playing');
+    $('#play').innerHTML = '&#9654;';
+    syncChannelUI();
+    if(channel === 'spotify'){
+      if(ready && player.pauseVideo) player.pauseVideo();
+      current = null;
+      $('#eyebrow').textContent = sp.token ? 'Spotify' : 'Not connected';
+      $('#title').textContent = sp.token ? (sp.tracks.length ? 'Press play to open the park' : 'Load a playlist below') : 'Connect Spotify below';
+      $('#sub').textContent = '';
+      if(sp.token && !sp.tracks.length) spLoadTracks();
+      if(sp.token) spLoadDevices();
+    } else {
+      spNowUri = null;
+      await spApi('/me/player/pause', { method:'PUT' }).catch(()=>{});
+      $('#eyebrow').textContent = 'Off air';
+      $('#title').textContent = 'Press play to open the park';
+      $('#sub').textContent = '';
+    }
+  };
+});
+
+spCallback();
+if(sp.token){
+  spStatus('ok','Connected');
+  $('#spcount').textContent = sp.tracks.length ? sp.tracks.length + ' tracks' : '—';
+}
+syncChannelUI();
+if(channel === 'spotify'){
+  $('#eyebrow').textContent = sp.token ? 'Spotify' : 'Not connected';
+  $('#title').textContent = sp.token ? 'Press play to open the park' : 'Connect Spotify below';
+}
 
 /* ---------------- boot ---------------- */
 syncTTS();
