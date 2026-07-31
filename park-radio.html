@@ -313,6 +313,8 @@
           <button class="chip mint" data-tts="browser" aria-pressed="true">Built-in</button>
           <button class="chip mint" data-tts="openai" aria-pressed="false">OpenAI</button>
           <button class="chip mint" data-tts="eleven" aria-pressed="false">ElevenLabs</button>
+          <button class="chip mint" data-tts="kokoro" aria-pressed="false">On-device</button>
+          <button class="chip" id="shaping" aria-pressed="true" title="Per-host pitch and pace on the built-in voice">Shaping</button>
         </div>
       </div>
 
@@ -324,6 +326,14 @@
         <div class="field">
           <label for="tvoice" id="tvoicelabel">Voice for this host</label>
           <select id="tvoice"></select>
+        </div>
+      </div>
+
+      <div class="field" id="loadbox" hidden>
+        <button class="btn" id="loadvoices">Download on-device voices</button>
+        <div class="note" style="margin-top:9px">
+          Roughly 90 MB, downloaded once and cached. After that it runs entirely in this
+          browser &mdash; no key, no cost per break, and it works with no signal.
         </div>
       </div>
 
@@ -422,44 +432,44 @@ const NAMES = {
 /* Casting. `prefer` matches against whatever voices the device actually has;
    rate and pitch do the heavy lifting on iOS where the voice list is short. */
 const VOICE = {
-  mansion:  { prefer:['Daniel','Arthur','Google UK English Male','Alex'], rate:.76, pitch:.75,
-              openai:'onyx',    direct:"Slow, sepulchral, and impeccably genteel. Long pauses. Velvet menace under perfect courtesy. Never rush a line.",
+  mansion:  { prefer:['Daniel','Arthur','Google UK English Male','Alex'], rate:.84, pitch:.92,
+              openai:'onyx', kokoro:'bm_george',    direct:"Slow, sepulchral, and impeccably genteel. Long pauses. Velvet menace under perfect courtesy. Never rush a line.",
               design:"An elderly British gentleman in his seventies with a deep, resonant voice that carries a hollow, cavernous quality. Aristocratic Received Pronunciation, impeccably polite. Speaks very slowly with long deliberate pauses, a faint smile audible beneath every word. Dry funereal warmth, as though delivering grim news he finds mildly amusing. Clean studio recording with a hint of large-room air." },
 
-  skipper:  { prefer:['Aaron','Fred','Google US English','Alex'], rate:1.12, pitch:1.05,
-              openai:'verse',   direct:"Brisk, deadpan, faintly bored. Toss the punchline away rather than selling it. No laughing at your own joke.",
+  skipper:  { prefer:['Aaron','Fred','Google US English','Alex'], rate:1.08, pitch:1.04,
+              openai:'verse', kokoro:'am_puck',   direct:"Brisk, deadpan, faintly bored. Toss the punchline away rather than selling it. No laughing at your own joke.",
               design:"An American man in his late twenties with a bright, slightly nasal and reedy timbre. Flat neutral American accent. Fast clipped delivery with deadpan comic timing, throwing lines away rather than selling them. Perpetually unimpressed and faintly bored, yet somehow energetic. Close-mic, dry studio recording." },
 
-  dungeon:  { prefer:['Arthur','Daniel','Gordon','Alex'], rate:.88, pitch:.6,
-              openai:'ash',     direct:"Low, gravelly, conspiratorial. Half-whispered, as if avoiding a guard. Rough around the edges.",
+  dungeon:  { prefer:['Arthur','Daniel','Gordon','Alex'], rate:.9, pitch:.88,
+              openai:'ash', kokoro:'am_fenrir',     direct:"Low, gravelly, conspiratorial. Half-whispered, as if avoiding a guard. Rough around the edges.",
               design:"A gruff man in his fifties with a hoarse, gravel-scraped voice worn down from years of shouting over wind and water. Rough rural West Country English accent with a rolling seafaring lilt. Low volume, conspiratorial, half-whispered as though avoiding a guard, with a wheezy laugh lurking beneath the words. Damp, stone-walled room tone." },
 
-  mining:   { prefer:['Alex','Fred','Aaron'], rate:.9, pitch:.8,
-              openai:'echo',    direct:"Weathered and plainspoken. Flat prairie cadence, unhurried, matter-of-fact about hardship.",
+  mining:   { prefer:['Alex','Fred','Aaron'], rate:.92, pitch:.94,
+              openai:'echo', kokoro:'am_michael',    direct:"Weathered and plainspoken. Flat prairie cadence, unhurried, matter-of-fact about hardship.",
               design:"A weathered American man in his sixties with a dry, dusty, low rasp. Rural western American accent, unhurried plainspoken cadence, flat and level. Matter-of-fact about danger and faintly fatalistic. Speaks like a man reading a posted notice aloud to people who already know the news. Slightly thin and distant, as if through an old camp loudspeaker." },
 
-  bayou:    { prefer:['Nicky','Samantha','Karen'], rate:.92, pitch:1,
-              openai:'coral',   direct:"Warm, easy, front-porch drawl. Unhurried and welcoming, like talking over music.",
+  bayou:    { prefer:['Nicky','Samantha','Karen'], rate:.94, pitch:1,
+              openai:'coral', kokoro:'am_onyx',   direct:"Warm, easy, front-porch drawl. Unhurried and welcoming, like talking over music.",
               design:"A man in his fifties from southern Louisiana with a rich gravel-and-honey voice and an easy Creole-inflected drawl. Unhurried, musical rise and fall, a generous laugh sitting in the throat. Speaks like a host welcoming friends up onto a porch. Relaxed pacing, warm close recording with natural room tone." },
 
-  bellhop:  { prefer:['Arthur','Daniel','Alex'], rate:.84, pitch:.85,
-              openai:'ballad',  direct:"Clipped, formal, unnervingly calm. Perfect diction. Deliver unsettling details as routine housekeeping.",
+  bellhop:  { prefer:['Arthur','Daniel','Alex'], rate:.9, pitch:.96,
+              openai:'ballad', kokoro:'bm_daniel',  direct:"Clipped, formal, unnervingly calm. Perfect diction. Deliver unsettling details as routine housekeeping.",
               design:"A crisp American man in his forties with a smooth mid-century transatlantic polish. Precise diction, formal and clipped, unnaturally calm. Every sentence delivered at the same measured tempo regardless of content, so alarming details arrive sounding like routine housekeeping. Clean, lightly compressed vintage recording." },
 
-  starport: { prefer:['Karen','Serena','Martha','Google UK English Female'], rate:1.1, pitch:1.18,
-              openai:'shimmer', direct:"Bright, crisp, over-articulated public address. Relentlessly pleasant. Slight synthetic polish.",
+  starport: { prefer:['Karen','Serena','Martha','Google UK English Female'], rate:1.08, pitch:1.08,
+              openai:'shimmer', kokoro:'bf_emma', direct:"Bright, crisp, over-articulated public address. Relentlessly pleasant. Slight synthetic polish.",
               design:"A bright woman in her thirties with a clear, forward, over-articulated public-address delivery. Neutral British accent with a faint synthetic sheen. Relentlessly pleasant, brisk pacing, gentle upward inflection at the end of each announcement. Sounds recorded in a clean booth for a transit terminal." },
 
-  outfitter:{ prefer:['Rishi','Moira','Daniel'], rate:.95, pitch:.9,
-              openai:'sage',    direct:"Calm, kind, seasoned. Steady radio delivery with a little distance on it, as if over a weak signal.",
+  outfitter:{ prefer:['Rishi','Moira','Daniel'], rate:.96, pitch:.97,
+              openai:'sage', kokoro:'bm_lewis',    direct:"Calm, kind, seasoned. Steady radio delivery with a little distance on it, as if over a weak signal.",
               design:"A calm man in his fifties with a warm, lightly weathered voice and Nepali-accented English. Measured, kind, and patient, with the steadiness of someone giving instructions that genuinely matter. Unhurried delivery, slight thinness and compression as though heard over a weak two-way radio signal." },
 
-  studio:   { prefer:['Samantha','Victoria','Nicky'], rate:1.18, pitch:1.1,
-              openai:'nova',    direct:"Fast, breezy, mid-task. Casual and a little distracted, like someone talking while typing.",
+  studio:   { prefer:['Samantha','Victoria','Nicky'], rate:1.12, pitch:1.06,
+              openai:'nova', kokoro:'af_nicole',    direct:"Fast, breezy, mid-task. Casual and a little distracted, like someone talking while typing.",
               design:"A woman in her late twenties with a bright, quick voice and a light vocal fry. Contemporary southern Californian accent. Breezy, casual and slightly distracted, as if talking while doing something else with her hands. Fast pacing, warm but offhand. Dry, close studio recording." },
 
-  fair:     { prefer:['Alex','Arthur','Daniel'], rate:.82, pitch:.9,
-              openai:'fable',   direct:"Grand, warm, mid-century newsreel. Total sincerity, rising conviction, generous pauses before big claims.",
+  fair:     { prefer:['Alex','Arthur','Daniel'], rate:.88, pitch:.94,
+              openai:'fable', kokoro:'am_adam',   direct:"Grand, warm, mid-century newsreel. Total sincerity, rising conviction, generous pauses before big claims.",
               design:"A grand American man in his fifties with a rich, burnished baritone and a mid-century newsreel transatlantic accent. Slow swelling delivery with generous pauses before important phrases, building conviction as a sentence goes on. Boundless civic sincerity and optimism, entirely without irony. Warm, gently tape-saturated vintage recording." }
 };
 
@@ -476,6 +486,7 @@ let dead     = store.get('dead', []);
 let segment  = store.get('segment', 600);
 let every    = store.get('every', 1);
 let volume   = store.get('vol', 70);
+let shaping  = store.get('shaping', true);
 
 const cfg = {
   akey:    store.get('akey', ''),
@@ -623,6 +634,41 @@ function loadBrowserVoices(){
 }
 if(synth){ loadBrowserVoices(); synth.onvoiceschanged = loadBrowserVoices; }
 
+const KOKORO_VOICES = ['af_heart','af_bella','af_nicole','af_sarah','af_sky','af_nova','af_aoede',
+  'am_adam','am_echo','am_eric','am_fenrir','am_liam','am_michael','am_onyx','am_puck',
+  'bf_alice','bf_emma','bf_isabella','bf_lily','bm_daniel','bm_fable','bm_george','bm_lewis'];
+
+let kokoro = null, kokoroBusy = false;
+
+async function loadKokoro(){
+  if(kokoro || kokoroBusy) return kokoro;
+  kokoroBusy = true;
+  const btn = $('#loadvoices');
+  try {
+    setStatus('', 'fetching on-device voices…');
+    if(btn) btn.textContent = 'Downloading…';
+    const { KokoroTTS } = await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm');
+    const gpu = !!navigator.gpu;
+    kokoro = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+      dtype: gpu ? 'fp32' : 'q8',
+      device: gpu ? 'webgpu' : 'wasm',
+      progress_callback: e => {
+        if(btn && e && e.status === 'progress' && e.progress != null)
+          btn.textContent = 'Downloading ' + Math.round(e.progress) + '%';
+      }
+    });
+    if(btn) btn.textContent = 'On-device voices ready';
+    setStatus('ok', 'On-device voices ready' + (gpu ? ' (GPU)' : ''));
+    fillVoices();
+  } catch(err){
+    kokoro = null;
+    setStatus('bad', 'On-device voices failed to load');
+    if(btn) btn.textContent = 'Retry download';
+  }
+  kokoroBusy = false;
+  return kokoro;
+}
+
 const OPENAI_VOICES = ['alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer','verse'];
 let evoices = [];
 
@@ -644,6 +690,7 @@ function voiceFor(k, provider){
   if(over) return over;
   const rec = VOICE[k] || {};
   if(provider === 'openai') return rec.openai || 'ash';
+  if(provider === 'kokoro') return rec.kokoro || 'af_heart';
   if(provider === 'eleven') return cfg.evoice || '';
   return '';
 }
@@ -663,6 +710,15 @@ function browserVoiceFor(k){
 async function synthesize(text, k){
   k = k || voiceKey;
   const rec = VOICE[k] || {};
+  if(cfg.tts === 'kokoro'){
+    const engine = await loadKokoro();
+    if(!engine) return null;
+    try {
+      const audio = await engine.generate(text, { voice: voiceFor(k,'kokoro') });
+      const blob = audio.toBlob ? audio.toBlob() : new Blob([audio.toWav()], { type:'audio/wav' });
+      return URL.createObjectURL(blob);
+    } catch(e){ setStatus('bad','On-device synthesis failed'); return null; }
+  }
   if(cfg.tts === 'openai' && cfg.okey){
     const attempts = [
       { model:'gpt-4o-mini-tts', instructions: rec.direct },
@@ -731,8 +787,8 @@ function deliver(text, url, done, pv){
     const u = new SpeechSynthesisUtterance(text);
     const v = browserVoiceFor(voiceKey);
     if(v) u.voice = v;
-    u.rate  = rec.rate  || .95;
-    u.pitch = rec.pitch || 1;
+    u.rate  = shaping ? (rec.rate || .95) : .96;
+    u.pitch = shaping ? (rec.pitch || 1)  : 1;
     u.onend = finish;
     u.onerror = finish;
     synth.speak(u);
@@ -1087,6 +1143,12 @@ function fillVoices(){
     cur = v ? v.voiceURI : '';
   }
   if(cfg.tts === 'openai'){ opts = OPENAI_VOICES.map(v => [v, v]); cur = voiceFor(k,'openai'); }
+  if(cfg.tts === 'kokoro'){
+    let list = KOKORO_VOICES;
+    try { if(kokoro){ const lv = kokoro.list_voices ? kokoro.list_voices() : Object.keys(kokoro.voices || {}); if(lv && lv.length) list = lv; } } catch(e){}
+    opts = list.map(v => [v, v]);
+    cur = voiceFor(k,'kokoro');
+  }
   if(cfg.tts === 'eleven'){ opts = evoices.map(v => [v.id, v.name]); cur = voiceFor(k,'eleven'); }
   if(!opts.length){
     sel.innerHTML = '<option>' + (cfg.tts === 'eleven' ? 'Add a key to load voices' : 'No voices available') + '</option>';
@@ -1111,7 +1173,9 @@ $('#tvoice').onchange = e => {
 function syncTTS(){
   document.querySelectorAll('[data-tts]').forEach(x => x.setAttribute('aria-pressed', x.dataset.tts === cfg.tts));
   const kf = $('#ttskeyfield');
-  kf.hidden = (cfg.tts === 'browser');
+  kf.hidden = (cfg.tts === 'browser' || cfg.tts === 'kokoro');
+  $('#loadbox').hidden = (cfg.tts !== 'kokoro');
+  if(cfg.tts === 'kokoro' && kokoro) $('#loadvoices').textContent = 'On-device voices ready';
   if(cfg.tts === 'openai'){ $('#tkeylabel').textContent = 'OpenAI API key'; $('#tkey').value = cfg.okey; $('#tkey').placeholder = 'sk-...'; }
   if(cfg.tts === 'eleven'){ $('#tkeylabel').textContent = 'ElevenLabs API key'; $('#tkey').value = cfg.ekey; $('#tkey').placeholder = 'xi-...'; }
   fillVoices();
@@ -1139,6 +1203,15 @@ $('#test').onclick = async () => {
     if(wasDucked) fadeTo(volume, 1800);
     setStatus(cfg.akey ? 'ok' : '', cfg.akey ? 'Booth ready' : 'offline · using built-in patter');
   });
+};
+
+$('#loadvoices').onclick = () => loadKokoro();
+
+$('#shaping').setAttribute('aria-pressed', shaping);
+$('#shaping').onclick = e => {
+  shaping = !shaping; store.set('shaping', shaping);
+  e.target.setAttribute('aria-pressed', shaping);
+  audition(cfg.pkey);
 };
 
 $('#copydesign').onclick = async () => {
