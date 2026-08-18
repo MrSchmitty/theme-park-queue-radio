@@ -324,6 +324,10 @@
       </div>
 
       <div class="two">
+        <div class="field" id="elemanualfield" hidden>
+          <label for="elemanual">Or paste a Voice ID for this host</label>
+          <input type="text" id="elemanual" placeholder="voice ID from the voice's page" autocomplete="off">
+        </div>
         <div class="field" id="ttskeyfield" hidden>
           <label for="tkey" id="tkeylabel">TTS API key</label>
           <input type="password" id="tkey" placeholder="key" autocomplete="off">
@@ -350,7 +354,9 @@
       </div>
 
       <div class="row" style="margin-top:6px">
+        <button class="btn ghost" id="eleload" hidden>Load voices</button>
         <button class="btn" id="test">Test the booth</button>
+        <button class="btn ghost" id="reloadvoices">Reload voices</button>
         <button class="btn ghost" id="clearkeys">Clear keys</button>
       </div>
 
@@ -731,15 +737,41 @@ const OPENAI_VOICES = ['alloy','ash','ballad','coral','echo','fable','nova','ony
 let evoices = [];
 
 async function loadElevenVoices(){
-  if(!cfg.ekey) return;
-  try {
-    const r = await fetch('https://api.elevenlabs.io/v1/voices', { headers:{ 'xi-api-key': cfg.ekey } });
-    if(!r.ok){ setStatus('bad','ElevenLabs: key rejected'); return; }
-    const d = await r.json();
-    evoices = (d.voices||[]).map(v => ({ id:v.voice_id, name:v.name }));
-    if(!cfg.evoice && evoices.length) cfg.evoice = evoices[0].id;
-    fillVoices();
-  } catch(e){ setStatus('bad','ElevenLabs: network error'); }
+  if(!cfg.ekey){ setStatus('bad','ElevenLabs: no key entered'); return; }
+  setStatus('', 'ElevenLabs: loading voices…');
+  const tries = [
+    'https://api.elevenlabs.io/v2/voices?page_size=100',
+    'https://api.elevenlabs.io/v1/voices'
+  ];
+  let lastMsg = '';
+  for(const url of tries){
+    try {
+      const r = await fetch(url, { headers:{ 'xi-api-key': cfg.ekey } });
+      if(!r.ok){
+        let detail = '';
+        try {
+          const j = await r.json();
+          detail = (j.detail && (j.detail.message || j.detail.status)) || j.message || '';
+        } catch(e){}
+        lastMsg = r.status + (detail ? ' ' + String(detail).slice(0,48) : '');
+        if(r.status === 401 || r.status === 403){
+          setStatus('bad','ElevenLabs ' + lastMsg + ' — check key permissions');
+          return;
+        }
+        continue;
+      }
+      const d = await r.json();
+      evoices = (d.voices||[]).map(v => ({ id:v.voice_id, name:v.name || v.voice_id }));
+      if(!evoices.length){ setStatus('bad','ElevenLabs: account has no voices'); return; }
+      if(!cfg.evoice) cfg.evoice = evoices[0].id;
+      setStatus('ok','ElevenLabs: ' + evoices.length + ' voices loaded');
+      fillVoices();
+      return;
+    } catch(e){
+      lastMsg = 'blocked by browser (CORS or network)';
+    }
+  }
+  setStatus('bad','ElevenLabs: ' + (lastMsg || 'could not load voices'));
 }
 
 /* Which voice should this host use, honouring any override you've set. */
@@ -1282,6 +1314,9 @@ function syncTTS(){
   const kf = $('#ttskeyfield');
   kf.hidden = (cfg.tts === 'browser' || cfg.tts === 'kokoro');
   $('#loadbox').hidden = (cfg.tts !== 'kokoro');
+  $('#eleload').hidden = (cfg.tts !== 'eleven');
+  $('#elemanualfield').hidden = (cfg.tts !== 'eleven');
+  if(cfg.tts === 'eleven') $('#elemanual').value = (cfg.voices[cfg.pkey] || {}).eleven || '';
   if(cfg.tts === 'kokoro' && kokoro) $('#loadvoices').textContent = 'On-device voices ready';
   if(cfg.tts === 'openai'){ $('#tkeylabel').textContent = 'OpenAI API key'; $('#tkey').value = cfg.okey; $('#tkey').placeholder = 'sk-...'; }
   if(cfg.tts === 'eleven'){ $('#tkeylabel').textContent = 'ElevenLabs API key'; $('#tkey').value = cfg.ekey; $('#tkey').placeholder = 'xi-...'; }
@@ -1314,6 +1349,16 @@ $('#test').onclick = async () => {
 
 $('#loadvoices').onclick = () => loadKokoro();
 
+$('#eleload').onclick = () => loadElevenVoices();
+
+$('#elemanual').oninput = e => {
+  const v = e.target.value.trim();
+  const k = cfg.pkey;
+  if(!cfg.voices[k]) cfg.voices[k] = {};
+  if(v) cfg.voices[k].eleven = v; else delete cfg.voices[k].eleven;
+  store.set('voices', cfg.voices);
+};
+
 $('#shaping').setAttribute('aria-pressed', shaping);
 $('#shaping').onclick = e => {
   shaping = !shaping; store.set('shaping', shaping);
@@ -1335,6 +1380,12 @@ $('#copydesign').onclick = async () => {
     btn.textContent = 'Selected — copy it';
   }
   setTimeout(()=>{ btn.textContent = 'Copy prompt'; }, 2200);
+};
+
+$('#reloadvoices').onclick = () => {
+  if(cfg.tts === 'eleven'){ evoices = []; loadElevenVoices(); }
+  else if(cfg.tts === 'kokoro'){ loadKokoro(); }
+  else { loadBrowserVoices(); fillVoices(); setStatus('', 'voices refreshed'); }
 };
 
 $('#clearkeys').onclick = () => {
