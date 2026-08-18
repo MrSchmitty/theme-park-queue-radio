@@ -168,6 +168,11 @@
   .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   @media (max-width:560px){ .two{grid-template-columns:1fr} }
 
+  .reveal{
+    font-family:inherit;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--mint);background:none;border:none;padding:0 0 0 8px;cursor:pointer;
+  }
+  .keyinfo{font-family:'Space Mono',monospace;font-size:10.5px;color:var(--dimmer);margin-top:6px}
   .designtext{
     background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:8px;
     padding:13px 15px;font-size:13px;line-height:1.6;color:var(--dim);
@@ -259,6 +264,7 @@
       <button class="chip mint" data-every="1" aria-pressed="true">Every track</button>
       <button class="chip mint" data-every="2" aria-pressed="false">Every 2nd</button>
       <button class="chip mint" data-every="4" aria-pressed="false">Every 4th</button>
+      <button class="chip mint" id="usecached" aria-pressed="true" hidden>Use clip bank</button>
       <span style="display:flex;align-items:center;gap:9px;font-size:12px;color:var(--dimmer)">
         Vol <input type="range" id="vol" min="0" max="100" value="70" aria-label="Volume">
       </span>
@@ -288,8 +294,8 @@
         <button class="chip" data-persona="skipper">Dock skipper</button>
         <button class="chip" data-persona="dungeon">Dungeon pirate</button>
         <button class="chip" data-persona="mining">Mine foreman</button>
-        <button class="chip" data-persona="bayou">Bayou hall</button>
-        <button class="chip" data-persona="bellhop">Night bellhop</button>
+        <button class="chip" data-persona="bayou">Bayou announcer</button>
+        <button class="chip" data-persona="bellhop">Anthology host</button>
         <button class="chip" data-persona="starport">Starport gate</button>
         <button class="chip" data-persona="outfitter">Trek outfitter</button>
         <button class="chip" data-persona="studio">Studio desk</button>
@@ -299,8 +305,10 @@
 
       <div class="two">
         <div class="field">
-          <label for="akey">Anthropic API key</label>
-          <input type="password" id="akey" placeholder="sk-ant-..." autocomplete="off">
+          <label for="akey">Anthropic API key <button class="reveal" id="showakey" type="button">show</button></label>
+          <input type="password" id="akey" placeholder="sk-ant-..." autocomplete="off"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" name="parkradio-anthropic">
+          <div class="keyinfo" id="akeyinfo">empty</div>
         </div>
         <div class="field">
           <label for="amodel">Model</label>
@@ -329,8 +337,10 @@
           <input type="text" id="elemanual" placeholder="voice ID from the voice's page" autocomplete="off">
         </div>
         <div class="field" id="ttskeyfield" hidden>
-          <label for="tkey" id="tkeylabel">TTS API key</label>
-          <input type="password" id="tkey" placeholder="key" autocomplete="off">
+          <label for="tkey" id="tkeylabel">TTS API key <button class="reveal" id="showtkey" type="button">show</button></label>
+          <input type="password" id="tkey" placeholder="key" autocomplete="off"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" name="parkradio-tts">
+          <div class="keyinfo" id="tkeyinfo">empty</div>
         </div>
         <div class="field">
           <label for="tvoice" id="tvoicelabel">Voice for this host</label>
@@ -459,80 +469,184 @@ const SEED = [
 ];
 
 const PERSONAS = {
-  mansion: "The resident host of a haunted estate, speaking to a guest who has wandered into the portrait gallery. Sepulchral, impeccably courteous, mock-ominous. Welcome them warmly and imply, politely, that leaving may not be an option. Treat each loop as another room of the house. Grave humor delivered perfectly straight — never wink at it.",
-  skipper: "A boat skipper filling air on the dock radio between departures. Deadpan, relentless punster, total commitment to the groaner. Build a pun off whatever the track title hands you and move on before anyone can react. Address the listener as a passenger. Your material must be original — never recycle jokes the actual attraction uses.",
-  dungeon: "A weathered buccaneer calling up from a stone cell somewhere below the waterline. Salt-cured, conspiratorial, treats the listener as a fellow prisoner or a passing scoundrel worth recruiting. Nautical vocabulary, dark good humor, mock-threats delivered with obvious affection.",
-  mining:  "The foreman of a gold rush mining company reading the day's dispatch over the camp speaker. Dusty, plainspoken, quietly superstitious about the mountain. Refer to tracks as shifts, hauls, or veins. Warn about weather and rockslides that never quite arrive.",
-  bayou:   "A bayou storyteller running a riverside music hall. Warm, unhurried, full of front-porch charm. Talk about the water, the cypress, the heat, and the band. Introduce each loop like a set at a good club where everyone already knows each other.",
-  bellhop: "The night bellhop at a grand hotel that has seen something it will not discuss. Formal, clipped, unnervingly calm. Announce tracks the way you'd announce floors. Imply the storm outside is worse than it looks and that the elevators have been temperamental.",
-  starport:"A spaceport gate announcer at a terminal that never closes. Bright, clipped, faintly bureaucratic. Frame each track as a departure, a boarding call, or a gate change. Cheerful about delays. Boundless mid-century optimism about the future.",
-  outfitter:"A trekking outfitter working the wireless from a tea house at altitude. Weathered, kind, matter-of-fact about danger. Mention weather on the pass and rumors drifting down from the higher camps. Treat the listener as a client who has already paid and cannot turn back.",
-  studio:  "The front desk at a record label's studio, working the night shift. Fast, breezy, name-drops sessions and mixes happening down the hall. Treat every loop as a track someone is cutting right now. Slightly harried, very Los Angeles.",
-  fair:    "The narrator of a World's Fair pavilion film, circa the mid-1960s. Warm, portentous, boundlessly optimistic about tomorrow. Grand claims about progress delivered with total sincerity. Speak in 'we' — a whole civilization moving forward together."
+  mansion:     "The resident host of a haunted estate, speaking to a guest who has wandered into the portrait gallery. Sepulchral, impeccably courteous, mock-ominous. Welcome them warmly and imply, politely, that leaving may not be an option. Treat each loop as another room of the house. Grave humor delivered perfectly straight — never wink at it.",
+  skipper:     "A boat skipper filling air on the dock radio between departures. Deadpan, relentless punster, total commitment to the groaner. Build a pun off whatever the track title hands you and move on before anyone can react. Address the listener as a passenger. Your material must be original — never recycle jokes the actual attraction uses.",
+  dungeon:     "A weathered buccaneer calling up from a stone cell somewhere below the waterline. Salt-cured, conspiratorial, treats the listener as a fellow prisoner or a passing scoundrel worth recruiting. Nautical vocabulary, dark good humor, mock-threats delivered with obvious affection.",
+  mining:      "The foreman of a gold rush mining railroad, hollering from the platform as the cars pull out. Urgent, energetic, shouting over machinery at people who are already moving away. Short bursts. Warnings about speed, the grade, and loose rock on the ridge. Never calm, never leisurely — you are always half a second too late to be heard properly.",
+  bayou:       "The dispatch announcer at a backwoods log flume, greeting each boat from a speaker horn above the loading dock. Warm, unhurried, Southern. Give practical instructions — settle in, hold on, mind the drop — but deliver them like the opening line of a tall tale. Gently amused by everyone's nerves. Welcome them back afterward as though you never doubted they'd make it.",
+  bellhop:     "The host of a mid-century television anthology series, introducing tonight's episode from somewhere just off camera. Clipped, precise, faintly amused. Present each track as a case, an exhibit, or a small piece of evidence the listener should examine. Ironic detachment laid over genuine unease. Describe the strange as though it were routine, and the routine as though it were strange. Address the listener directly, and never explain the joke.",
+  starport:    "A spaceport gate announcer at a terminal that never closes. Bright, clipped, faintly bureaucratic. Frame each track as a departure, a boarding call, or a gate change. Cheerful about delays. Boundless mid-century optimism about the future.",
+  outfitter:   "A trekking outfitter working the wireless from a tea house at altitude. Weathered, kind, matter-of-fact about danger. Mention weather on the pass and rumors drifting down from the higher camps. Treat the listener as a client who has already paid and cannot turn back.",
+  studio:      "The front desk at a record label's studio, working the night shift. Fast, breezy, name-drops sessions and mixes happening down the hall. Treat every loop as a track someone is cutting right now. Slightly harried, very Los Angeles.",
+  fair:        "The narrator of a World's Fair pavilion film, circa the mid-1960s. Warm, portentous, boundlessly optimistic about tomorrow. Grand claims about progress delivered with total sincerity. Speak in 'we' — a whole civilization moving forward together."
 };
 
 /* One original line per host, so you can audition a voice with no API key. */
 const DEMOS = {
-  mansion:  "Do come in. The gallery is rather full this evening, but I'm certain we can find room for one more.",
-  skipper:  "Afternoon, folks. We've got a full boat, a leaky engine, and absolutely no plan. Sit back and enjoy the delay.",
-  dungeon:  "Psst. Down here, through the bars. Ye've got the look of someone who'd help an honest man find his keys.",
-  mining:   "Dispatch from the mountain. Wind's up on the ridge and the north vein's holding, so we'll run the next shift regardless.",
-  bayou:    "Come on in, water's high and the band's already warm. Pull a chair up by the rail and you can hear the cypress from there.",
-  bellhop:  "Good evening. The lobby is quiet, the storm has not moved, and the service elevator is behaving itself. For now.",
-  starport: "Attention travelers, departures are running on schedule, more or less. Proceed to your gate and mind the artificial gravity.",
-  outfitter:"Radio check from base camp. Pass is clear, weather turns by evening, and the porters say the ridge has been noisy. Pay it no mind.",
-  studio:   "Hey — front desk. Studio B's been going since noon on something with a lot of strings. Grab a seat, they're nearly through.",
-  fair:     "Tomorrow is not a distant country. It is a place we are building together, one bright and orderly day at a time."
+  mansion:     "Do come in. The gallery is rather full this evening, but I'm certain we can find room for one more.",
+  skipper:     "Afternoon, folks. We've got a full boat, a leaky engine, and absolutely no plan. Sit back and enjoy the delay.",
+  dungeon:     "Psst. Down here, through the bars. Ye've got the look of someone who'd help an honest man find his keys.",
+  mining:      "Last car's loaded — she runs quick out of the station, so keep your arms in and stay seated!",
+  bayou:       "Settle in now and keep your hands inside the log. It's a fair way down, and the bayou don't much care whether you're ready.",
+  bellhop:     "Good evening. What follows is a recording. Ordinary enough, on the surface. You may wish to listen more closely than that.",
+  starport:    "Attention travelers, departures are running on schedule, more or less. Proceed to your gate and mind the artificial gravity.",
+  outfitter:   "Radio check from base camp. Pass is clear, weather turns by evening, and the porters say the ridge has been noisy. Pay it no mind.",
+  studio:      "Hey — front desk. Studio B's been going since noon on something with a lot of strings. Grab a seat, they're nearly through.",
+  fair:        "Tomorrow is not a distant country. It is a place we are building together, one bright and orderly day at a time."
 };
 
 const NAMES = {
-  mansion:'Mansion host', skipper:'Dock skipper', dungeon:'Dungeon pirate', mining:'Mine foreman',
-  bayou:'Bayou hall', bellhop:'Night bellhop', starport:'Starport gate', outfitter:'Trek outfitter',
-  studio:'Studio desk', fair:'Fair narrator'
+  mansion:'Mansion host',
+  skipper:'Dock skipper',
+  dungeon:'Dungeon pirate',
+  mining:'Mine foreman',
+  bayou:'Bayou announcer',
+  bellhop:'Anthology host',
+  starport:'Starport gate',
+  outfitter:'Trek outfitter',
+  studio:'Studio desk',
+  fair:'Fair narrator'
 };
 
 /* Casting. `prefer` matches against whatever voices the device actually has;
    rate and pitch do the heavy lifting on iOS where the voice list is short. */
 const VOICE = {
-  mansion:  { prefer:['Daniel','Arthur','Google UK English Male','Alex'], rate:.84, pitch:.92,
+  mansion:    { prefer:['Daniel','Arthur','Google UK English Male','Alex'], rate:.84, pitch:.92,
               openai:'onyx', kokoro:'bm_george',    direct:"Slow, sepulchral, and impeccably genteel. Long pauses. Velvet menace under perfect courtesy. Never rush a line.",
               design:"An elderly British gentleman in his seventies with a deep, resonant voice that carries a hollow, cavernous quality. Aristocratic Received Pronunciation, impeccably polite. Speaks very slowly with long deliberate pauses, a faint smile audible beneath every word. Dry funereal warmth, as though delivering grim news he finds mildly amusing. Clean studio recording with a hint of large-room air." },
-
-  skipper:  { prefer:['Aaron','Fred','Google US English','Alex'], rate:1.08, pitch:1.04,
+  skipper:    { prefer:['Aaron','Fred','Google US English','Alex'], rate:1.08, pitch:1.04,
               openai:'verse', kokoro:'am_puck',   direct:"Brisk, deadpan, faintly bored. Toss the punchline away rather than selling it. No laughing at your own joke.",
               design:"An American man in his late twenties with a bright, slightly nasal and reedy timbre. Flat neutral American accent. Fast clipped delivery with deadpan comic timing, throwing lines away rather than selling them. Perpetually unimpressed and faintly bored, yet somehow energetic. Close-mic, dry studio recording." },
-
-  dungeon:  { prefer:['Arthur','Daniel','Gordon','Alex'], rate:.9, pitch:.88,
+  dungeon:    { prefer:['Arthur','Daniel','Gordon','Alex'], rate:.9, pitch:.88,
               openai:'ash', kokoro:'am_fenrir',     direct:"Low, gravelly, conspiratorial. Half-whispered, as if avoiding a guard. Rough around the edges.",
               design:"A gruff man in his fifties with a hoarse, gravel-scraped voice worn down from years of shouting over wind and water. Rough rural West Country English accent with a rolling seafaring lilt. Low volume, conspiratorial, half-whispered as though avoiding a guard, with a wheezy laugh lurking beneath the words. Damp, stone-walled room tone." },
-
-  mining:   { prefer:['Alex','Fred','Aaron'], rate:.92, pitch:.94,
-              openai:'echo', kokoro:'am_michael',    direct:"Weathered and plainspoken. Flat prairie cadence, unhurried, matter-of-fact about hardship.",
-              design:"A weathered American man in his sixties with a dry, dusty, low rasp. Rural western American accent, unhurried plainspoken cadence, flat and level. Matter-of-fact about danger and faintly fatalistic. Speaks like a man reading a posted notice aloud to people who already know the news. Slightly thin and distant, as if through an old camp loudspeaker." },
-
-  bayou:    { prefer:['Nicky','Samantha','Karen'], rate:.94, pitch:1,
-              openai:'coral', kokoro:'am_onyx',   direct:"Warm, easy, front-porch drawl. Unhurried and welcoming, like talking over music.",
-              design:"A man in his fifties from southern Louisiana with a rich gravel-and-honey voice and an easy Creole-inflected drawl. Unhurried, musical rise and fall, a generous laugh sitting in the throat. Speaks like a host welcoming friends up onto a porch. Relaxed pacing, warm close recording with natural room tone." },
-
-  bellhop:  { prefer:['Arthur','Daniel','Alex'], rate:.9, pitch:.96,
-              openai:'ballad', kokoro:'bm_daniel',  direct:"Clipped, formal, unnervingly calm. Perfect diction. Deliver unsettling details as routine housekeeping.",
-              design:"A crisp American man in his forties with a smooth mid-century transatlantic polish. Precise diction, formal and clipped, unnaturally calm. Every sentence delivered at the same measured tempo regardless of content, so alarming details arrive sounding like routine housekeeping. Clean, lightly compressed vintage recording." },
-
-  starport: { prefer:['Karen','Serena','Martha','Google UK English Female'], rate:1.08, pitch:1.08,
+  mining:     { prefer:['Aaron','Fred','Alex'], rate:1.06, pitch:1.02,
+              openai:'echo', kokoro:'am_michael',    direct:"Loud and urgent, projecting over machinery. Fast and clipped, energy rising, hollering a warning after a train that's already pulling away. Never sleepy, never measured.",
+              design:"A robust American man in his forties with a big, brassy, carrying chest voice, shouting to be heard over engine noise and moving cars. Rough rural western accent. Fast, clipped, urgent delivery that rises in volume across a sentence, as though calling after people already pulling away from him. Energetic and slightly hoarse from doing this all day. Recorded outdoors with open air around it." },
+  bayou:      { prefer:['Aaron','Alex','Fred'], rate:.94, pitch:.96,
+              openai:'alloy', kokoro:'am_onyx',   direct:"Warm, unhurried, avuncular. Deliver boarding instructions like the opening of a story rather than a safety notice. Gentle amusement throughout, never brisk.",
+              design:"A warm American man in his late fifties with a rich, round, resonant voice and a soft gravel underneath it. Gentle rural Southern accent with an easy musical cadence and a smile audible in every line. Unhurried and avuncular, delivering practical instructions as though they were the opening of a tall tale. Recorded outdoors over a public address horn, with open air and moving water behind it." },
+  bellhop:    { prefer:['Alex','Aaron','Fred'], rate:.88, pitch:.94,
+              openai:'ballad', kokoro:'am_eric',  direct:"Clipped, precise, mid-century broadcast delivery. Hard stops between phrases. Dry irony beneath formal authority. Deliver the strange as routine and the routine as strange.",
+              design:"An American man in his forties with a crisp, tightly controlled baritone and mid-century television broadcast diction. Every consonant precisely landed, faint New York vowels underneath. Measured and clipped, with hard full stops between phrases and a trace of dry amusement held back. Formal and authoritative, delivering unsettling observations at exactly the same even tempo as pleasantries. Clean vintage studio recording with light tape compression." },
+  starport:   { prefer:['Karen','Serena','Martha','Google UK English Female'], rate:1.08, pitch:1.08,
               openai:'shimmer', kokoro:'bf_emma', direct:"Bright, crisp, over-articulated public address. Relentlessly pleasant. Slight synthetic polish.",
               design:"A bright woman in her thirties with a clear, forward, over-articulated public-address delivery. Neutral British accent with a faint synthetic sheen. Relentlessly pleasant, brisk pacing, gentle upward inflection at the end of each announcement. Sounds recorded in a clean booth for a transit terminal." },
-
-  outfitter:{ prefer:['Rishi','Moira','Daniel'], rate:.96, pitch:.97,
+  outfitter:  { prefer:['Rishi','Moira','Daniel'], rate:.96, pitch:.97,
               openai:'sage', kokoro:'bm_lewis',    direct:"Calm, kind, seasoned. Steady radio delivery with a little distance on it, as if over a weak signal.",
               design:"A calm man in his fifties with a warm, lightly weathered voice and Nepali-accented English. Measured, kind, and patient, with the steadiness of someone giving instructions that genuinely matter. Unhurried delivery, slight thinness and compression as though heard over a weak two-way radio signal." },
-
-  studio:   { prefer:['Samantha','Victoria','Nicky'], rate:1.12, pitch:1.06,
+  studio:     { prefer:['Samantha','Victoria','Nicky'], rate:1.12, pitch:1.06,
               openai:'nova', kokoro:'af_nicole',    direct:"Fast, breezy, mid-task. Casual and a little distracted, like someone talking while typing.",
               design:"A woman in her late twenties with a bright, quick voice and a light vocal fry. Contemporary southern Californian accent. Breezy, casual and slightly distracted, as if talking while doing something else with her hands. Fast pacing, warm but offhand. Dry, close studio recording." },
-
-  fair:     { prefer:['Alex','Arthur','Daniel'], rate:.88, pitch:.94,
+  fair:       { prefer:['Alex','Arthur','Daniel'], rate:.88, pitch:.94,
               openai:'fable', kokoro:'am_adam',   direct:"Grand, warm, mid-century newsreel. Total sincerity, rising conviction, generous pauses before big claims.",
               design:"A grand American man in his fifties with a rich, burnished baritone and a mid-century newsreel transatlantic accent. Slow swelling delivery with generous pauses before important phrases, building conviction as a sentence goes on. Boundless civic sincerity and optimism, entirely without irony. Warm, gently tape-saturated vintage recording." }
+};
+
+/* Each host's own world: what they call a track, what they call the listener,
+   the vocabulary they draw on, the registers they never touch, and the moves
+   they make on air. This is what keeps them from converging on one voice. */
+const WORLD = {
+  mansion: {
+    calls:"a room, a piece the house has selected, something drifting up the corridor",
+    you:"our guest",
+    words:"portrait, corridor, chandelier, draft, threshold, tenant, the hour, lingering, departure, the house itself",
+    never:"sunshine, crowds, snacks, exclamation marks, modern slang, anything brisk or cheerful",
+    moves:"welcome them in as though they had already agreed to stay; let the house choose the music rather than yourself; remark on the hour; imply, always politely, that leaving is not being arranged",
+    length:"two sentences, unhurried, with a comma where a lesser voice would stop",
+    fbOpen:["The house has chosen","Drifting up from the east wing now,","Next, from somewhere down the corridor,","Our next room offers"],
+    fbClose:["Do stay.","There is no hurry. There is no hurry at all.","Mind the draft.","We have prepared it especially."]
+  },
+  skipper: {
+    calls:"this leg, the next stretch of river, our featured attraction",
+    you:"folks, passengers",
+    words:"dock, engine, current, wildlife, schedule, hull, life jacket, the backside of water",
+    never:"awe, sincerity, grandeur, genuine fear, anything ceremonial",
+    moves:"back-announce whatever just finished with a groaner; undersell what's coming; apologise for the boat; never laugh at your own material",
+    length:"two short sentences, second one flatter than the first",
+    fbOpen:["Coming up on your left,","Next stop,","Our next attraction is","Now entering"],
+    fbClose:["Try to contain yourselves.","That's the whole tour, folks.","Please remain seated.","It gets worse."]
+  },
+  dungeon: {
+    calls:"a tune, a bit o' music",
+    you:"matey, friend, fellow guest of the crown",
+    words:"bars, keys, tide, brig, plunder, gallows, rum, the guard, a cell, the harbour",
+    never:"politeness, corporate cheer, optimism about tomorrow, technical language",
+    moves:"speak low, as though the guard is nearby; ask a small favour you know won't be granted; a mock threat delivered fondly; complain about the noise from upstairs",
+    length:"one or two short sentences, conspiratorial",
+    fbOpen:["Here's one for ye,","Listen close now,","They're playing","Ah,"],
+    fbClose:["Don't be a stranger.","The keys, matey. Think on it.","I'll be here.","Mind the tide."]
+  },
+  mining: {
+    calls:"a run, a haul, the next shift",
+    you:"riders, folks",
+    words:"grade, rail, ore, ridge, rockslide, whistle, brake, tunnel, canyon, the mountain",
+    never:"calm, leisure, elegance, long sentences, anything reflective",
+    moves:"shout it; name a hazard; hurry them along; you are always half a beat behind the train",
+    length:"one or two short bursts, exclamation over explanation",
+    fbOpen:["Comin' up on the line —","Next haul's","Hold tight, here's","She's rolling out with"],
+    fbClose:["Hang on!","Watch that grade!","Keep your arms in!","She don't slow for nobody!"]
+  },
+  bayou: {
+    calls:"the next stretch of water, this run",
+    you:"folks, y'all",
+    words:"current, cypress, the drop, splash, dock, moss, heat, evening, the bayou",
+    never:"urgency, technical language, irony, anything clipped",
+    moves:"welcome them aboard like company you've been expecting; frame the track as the start of a story; welcome them back afterward as though you never doubted them",
+    length:"two unhurried sentences with a little music in them",
+    fbOpen:["Settle in now, here comes","Next up on the water,","We got","Coming round the bend,"],
+    fbClose:["Take your time with it.","Water's fine.","Don't rush off.","Told you you'd like it."]
+  },
+  bellhop: {
+    calls:"an exhibit, a case, the following recording, a submission",
+    you:"you",
+    words:"evidence, consideration, ordinary, coincidence, the hour, a file, an observation, precedent",
+    never:"warmth, enthusiasm, slang, exclamation, reassurance",
+    moves:"state a flat premise, then undercut it; address the listener directly; deliver the unsettling at the same tempo as the mundane; never explain the joke",
+    length:"two clipped sentences with a hard stop between them",
+    fbOpen:["Consider, if you will,","The following recording:","Exhibit for this hour:","Presented without comment:"],
+    fbClose:["Draw your own conclusions.","We shall see.","Note the hour.","Nothing unusual about that. Nothing whatsoever."]
+  },
+  starport: {
+    calls:"a departure, this boarding, the next scheduled transmission",
+    you:"travelers, passengers",
+    words:"gate, boarding, terminal, schedule, gravity, transit, concourse, manifest, departure board",
+    never:"fear, intimacy, roughness, sarcasm, anything unresolved",
+    moves:"structure it as an announcement; be relentlessly pleasant about delays and irregularities; mention a gate change nobody needs",
+    length:"one announcement, two sentences, upward inflection at the end",
+    fbOpen:["Now boarding at this gate:","Attention travelers, next departure is","Scheduled for this hour:","Please proceed for"],
+    fbClose:["Thank you for your patience.","Have a pleasant transit.","We appreciate your cooperation.","Mind the gravity."]
+  },
+  outfitter: {
+    calls:"the next leg, this stretch",
+    you:"clients",
+    words:"the pass, ridge, weather, camp, porters, altitude, signal, ropes, the summit",
+    never:"theatrics, jokes, panic, exaggeration",
+    moves:"open like a radio check; give a condition report; reassure without softening the facts; treat them as people who have already committed",
+    length:"two steady sentences, no flourish",
+    fbOpen:["Base camp here. Next up,","Conditions are holding. Coming through now,","On the wireless with","Next leg is"],
+    fbClose:["Steady pace.","Weather turns by evening.","Keep your footing.","We'll check in again shortly."]
+  },
+  studio: {
+    calls:"a cut, a take, this one",
+    you:"you",
+    words:"session, mix, the booth, down the hall, the desk, phones, an engineer, playback, overtime",
+    never:"formality, grandeur, ceremony, portentousness",
+    moves:"talk mid-task, as if doing something else; gossip about who's in which room; interrupt yourself and recover",
+    length:"one or two quick sentences, casual, slightly clipped",
+    fbOpen:["Okay — rolling with","Next up, they're running","Got","This one's"],
+    fbClose:["Anyway. Enjoy.","Back in a sec.","Don't ask me, I just answer the phones.","It's good, actually."]
+  },
+  fair: {
+    calls:"a demonstration, an exhibit, this presentation",
+    you:"friends",
+    words:"tomorrow, progress, the century, civilization, wonder, the machine, the horizon, ingenuity",
+    never:"irony, sarcasm, cynicism, slang, doubt",
+    moves:"build across the sentence toward a claim larger than the occasion warrants; speak in 'we', meaning all of humanity; total sincerity",
+    length:"two sentences, the second grander than the first",
+    fbOpen:["And now, a demonstration:","Friends, consider","Presented for your wonder,","Behold —"],
+    fbClose:["The future is listening.","We have only begun.","Such is the promise of tomorrow.","Progress, friends, has a sound."]
+  }
 };
 
 const store = {
@@ -580,6 +694,19 @@ function armWatchdog(){
 }
 
 const $ = s => document.querySelector(s);
+
+/* Mobile copy/paste loves to add quotes, spaces and zero-width characters. */
+function cleanKey(v){
+  return (v||'')
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .replace(/[\s]/g,'')
+    .replace(/^["'`]+|["'`]+$/g,'')
+    .trim();
+}
+function describeKey(v){
+  if(!v) return 'empty';
+  return v.length + ' chars, starts ' + v.slice(0,3) + '…';
+}
 const DUCK = 0.22;            // music level under the DJ
 
 /* ---------------- marquee ---------------- */
@@ -603,49 +730,61 @@ function cleanTitle(t){
 }
 
 /* ---------------- offline fallback patter ---------------- */
-const OPENERS = ["Coming up next,","Rolling into","Here comes","Next on the loop,","Settling in with","Up now,","Easing into","And now,"];
-const CLOSERS = ["Stay a while.","Take your time with this one.","No rush to be anywhere.","The park's yours tonight.","Let it run.","Nice and slow.","Enjoy the walk."];
-const SCENE = {
-  night:   ["The lamps are on and the crowds have thinned out.","It's after dark, so this one glows a little.","Late hours in the park now."],
-  morning: ["Rope drop energy on this one.","Gates are open and the streets are still empty.","Sun's barely over the berm."],
-  day:     ["Full sun, high traffic, popcorn in the air.","Middle of the day and the queues are stretching out."],
-  holiday: ["Garlands are up for this one.","The holiday overlay's running.","Tinsel on Main Street tonight."]
-};
 const pick = a => a[Math.floor(Math.random()*a.length)];
 
-function fallbackLine(title){
-  const t = cleanTitle(title), h = new Date().getHours();
-  let scene;
-  if(/christmas|holiday|merry|jingle|yuletide|noel/i.test(t)) scene = pick(SCENE.holiday);
-  else if(h < 11) scene = pick(SCENE.morning);
-  else if(h < 17) scene = pick(SCENE.day);
-  else scene = pick(SCENE.night);
-  const bits = [scene, pick(OPENERS)+" "+t+"."];
-  if(Math.random() < .6) bits.push(pick(CLOSERS));
-  if(Math.random() < .35) bits.push(bits.shift());
+function fallbackLine(title, k){
+  k = k || cfg.pkey;
+  const w = WORLD[k] || {};
+  const t = cleanTitle(title);
+  const open  = (w.fbOpen  || ["Coming up,"]);
+  const close = (w.fbClose || ["Enjoy."]);
+  const bits = [pick(open) + " " + t + "."];
+  if(Math.random() < .7) bits.push(pick(close));
   return bits.join(" ");
 }
 
-/* ---------------- Claude ---------------- */
-const SYSTEM = `You are the between-track voice of a private internet radio station that plays nothing but Disney theme park background music: area loops, queue music, parade and fireworks scores, resort lobby loops.
 
-Write ONE spoken radio break. Rules:
-- One or two sentences. Under 45 words. It gets read aloud, so write for the ear.
-- Plain text only. No emoji, no stage directions, no quotation marks around the whole line, no markdown.
-- Name the track naturally. The YouTube titles are often messy — say what a human would say, not the raw filename.
-- Never quote song lyrics, ride narration, or any scripted park dialogue. Describe, don't reproduce.
-- Never invent facts you aren't sure of. Atmosphere is always safer than a claimed date or composer.
-- Vary your openings. You'll be told what you said recently; don't reuse those shapes.
-- There is one listener and they've heard a station ID a thousand times. Don't over-explain.`;
+/* ---------------- Claude ---------------- */
+function buildSystem(k){
+  const w = WORLD[k] || {};
+  const p = PERSONAS[k] || cfg.persona;
+  return `You are the between-track voice of a private radio station playing Disney theme park background music: area loops, queue music, parade and fireworks scores, resort lobby loops.
+
+YOU ARE NOT A GENERIC RADIO HOST. You are this specific character and nobody else:
+${p}
+
+Your world:
+- You refer to a track as: ${w.calls || 'a track'}
+- You call the listener: ${w.you || 'the listener'}
+- Vocabulary you draw on: ${w.words || 'park imagery'}
+- Registers you NEVER use: ${w.never || 'none'}
+- Your moves on air: ${w.moves || 'introduce the track'}
+- Your shape: ${w.length || 'one or two sentences'}
+
+Being a real DJ means: back-announcing what just finished, teasing what's next,
+noticing the hour, and having a running relationship with one listener. Do those
+things — but do them the way THIS character would, using your own vocabulary. A
+break that any of the other hosts could have said is a failed break.
+
+Craft rules:
+- Write for the ear. It gets read aloud by a voice actor.
+- Plain text only. No emoji, no stage directions, no markdown, no surrounding quotes.
+- Name the track naturally. The titles are often messy filenames — say what a person would say.
+- Never quote or reproduce song lyrics, ride narration, or any scripted attraction dialogue,
+  not even a single line, and never a lightly reworded version of one. Describe instead.
+- Never invent facts. A confident wrong attribution is worse than none, so when you are
+  not certain what something is from, stay with atmosphere.
+- Vary your openings. You will be shown your recent breaks; do not reuse those shapes.
+- One listener, and they have heard a station ID a thousand times. Do not over-explain.`;
+}
 
 async function claudeLine(title, prevTitle){
-  if(!cfg.akey) return fallbackLine(title);
+  if(!cfg.akey) return fallbackLine(title, cfg.pkey);
   const now = new Date();
   const ctx = [
     `Track starting now: ${cleanTitle(title)}`,
     prevTitle ? `Track that just finished: ${cleanTitle(prevTitle)}` : `This is the first track of the session.`,
     `Listener's local time: ${now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} on ${now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}`,
-    `DJ character: ${cfg.persona}`,
     recentLines.length ? `Your last few breaks (do not echo these):\n- ${recentLines.slice(-5).join('\n- ')}` : ''
   ].filter(Boolean).join('\n');
 
@@ -661,25 +800,25 @@ async function claudeLine(title, prevTitle){
       body: JSON.stringify({
         model: cfg.model,
         max_tokens: 200,
-        system: SYSTEM,
+        system: buildSystem(cfg.pkey),
         messages:[{ role:'user', content: ctx }]
       })
     });
     if(!r.ok){
       const e = await r.json().catch(()=>({}));
       setStatus('bad', 'Claude: ' + (e.error && e.error.message ? e.error.message.slice(0,60) : r.status));
-      return fallbackLine(title);
+      return fallbackLine(title, cfg.pkey);
     }
     const data = await r.json();
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim();
-    if(!text) return fallbackLine(title);
+    if(!text) return fallbackLine(title, cfg.pkey);
     setStatus('ok', 'Claude: connected');
     recentLines.push(text);
     if(recentLines.length > 8) recentLines.shift();
     return text;
   } catch(err){
     setStatus('bad', 'Claude: network error');
-    return fallbackLine(title);
+    return fallbackLine(title, cfg.pkey);
   }
 }
 
@@ -848,20 +987,57 @@ async function synthesize(text, k){
 
 const djAudio = new Audio();
 
+/* Pre-rendered clips committed to the repo under voices/.
+   Removes the per-break cost and works with no signal. */
+let clips = null;
+let useCached = store.get('useCached', true);
+
+async function loadClips(){
+  try {
+    const r = await fetch('voices/manifest.json', { cache:'no-store' });
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d && typeof d === 'object'){
+      clips = d;
+      const n = Object.values(d).reduce((a,v)=> a + ((v.breaks||[]).length) + (v.demo?1:0), 0);
+      setStatus('ok', 'Clip bank: ' + n + ' recordings found');
+      syncCached();
+    }
+  } catch(e){ /* no bank committed yet — live synthesis handles it */ }
+}
+
+function clipPath(k, file){ return 'voices/' + k + '/' + file; }
+
+function cachedDemo(k){
+  const e = clips && clips[k];
+  return (e && e.demo) ? clipPath(k, e.demo) : null;
+}
+function cachedBreak(k){
+  const e = clips && clips[k];
+  if(!e || !e.breaks || !e.breaks.length) return null;
+  return clipPath(k, e.breaks[Math.floor(Math.random()*e.breaks.length)]);
+}
+function syncCached(){
+  const btn = $('#usecached');
+  if(!btn) return;
+  btn.hidden = !clips;
+  btn.setAttribute('aria-pressed', useCached);
+}
+
 /* Speak a line over the ducked music, then hand back control. */
 function deliver(text, url, done, pv){
   const box = $(pv ? '#preview' : '#dj');
   const txt = $(pv ? '#previewtext' : '#djtext');
   talking = true;
   document.body.classList.add('talking');
-  txt.textContent = text;
+  txt.textContent = text || 'a recorded break';
   box.hidden = false;
 
   const finish = () => {
     if(!talking) return;
     talking = false;
     document.body.classList.remove('talking');
-    if(url) URL.revokeObjectURL(url);
+    if(url && url.startsWith('blob:')) URL.revokeObjectURL(url);
     setTimeout(()=>{ if(!talking) box.hidden = true; }, pv ? 14000 : 8000);
     done();
   };
@@ -1057,7 +1233,9 @@ async function ytNext(){
           voiceKey = cfg.pkey;
           fadeTo(Math.round(volume * DUCK), 700);
           let line, url;
-          if(upcoming && upcoming.id === id){ line = upcoming.line; url = upcoming.url; upcoming = null; }
+          const bank = (useCached || !cfg.akey) ? cachedBreak(cfg.pkey) : null;
+          if(bank){ line = ''; url = bank; }
+          else if(upcoming && upcoming.id === id){ line = upcoming.line; url = upcoming.url; upcoming = null; }
           else { line = await claudeLine(titles[id], prevTitle); url = await synthesize(line, cfg.pkey); }
           deliver(line, url, () => { fadeTo(volume, 2200, prefetch); });
         } else {
@@ -1240,7 +1418,7 @@ async function audition(key){
   if(ducking) fadeTo(Math.round(volume * DUCK), 400);
   $('#previewtext').textContent = 'auditioning…';
   $('#preview').hidden = false;
-  const url = await synthesize(text, key);
+  const url = cachedDemo(key) || await synthesize(text, key);
   deliver(text, url, () => { if(ducking) fadeTo(volume, 1400); }, true);
 }
 
@@ -1262,7 +1440,8 @@ document.querySelectorAll('[data-persona]').forEach(b => {
 
 $('#akey').value = cfg.akey;
 $('#akey').oninput = e => {
-  cfg.akey = e.target.value.trim(); store.set('akey', cfg.akey);
+  cfg.akey = cleanKey(e.target.value); store.set('akey', cfg.akey);
+  $('#akeyinfo').textContent = describeKey(cfg.akey);
   setStatus('', cfg.akey ? 'Claude: key saved, untested' : 'offline · using built-in patter');
 };
 $('#amodel').value = cfg.model;
@@ -1327,7 +1506,9 @@ document.querySelectorAll('[data-tts]').forEach(b => {
   b.onclick = () => { cfg.tts = b.dataset.tts; store.set('tts', cfg.tts); syncTTS(); };
 });
 $('#tkey').oninput = e => {
-  const v = e.target.value.trim();
+  const v = cleanKey(e.target.value);
+  $('#tkeyinfo').textContent = describeKey(v) +
+    (cfg.tts === 'eleven' && v && !/^sk_/.test(v) ? ' — expected it to start sk_' : '');
   if(cfg.tts === 'openai'){ cfg.okey = v; store.set('okey', v); }
   if(cfg.tts === 'eleven'){ cfg.ekey = v; store.set('ekey', v); if(v.length > 20) loadElevenVoices(); }
 };
@@ -1381,6 +1562,22 @@ $('#copydesign').onclick = async () => {
   }
   setTimeout(()=>{ btn.textContent = 'Copy prompt'; }, 2200);
 };
+
+function wireReveal(btn, input){
+  $(btn).onclick = () => {
+    const el = $(input);
+    const shown = el.type === 'text';
+    el.type = shown ? 'password' : 'text';
+    $(btn).textContent = shown ? 'show' : 'hide';
+  };
+}
+$('#usecached').onclick = e => {
+  useCached = !useCached; store.set('useCached', useCached);
+  e.target.setAttribute('aria-pressed', useCached);
+};
+
+wireReveal('#showakey', '#akey');
+wireReveal('#showtkey', '#tkey');
 
 $('#reloadvoices').onclick = () => {
   if(cfg.tts === 'eleven'){ evoices = []; loadElevenVoices(); }
@@ -1848,6 +2045,9 @@ if(channel === 'spotify'){
 
 /* ---------------- boot ---------------- */
 syncTTS();
+loadClips();
+$('#akeyinfo').textContent = describeKey(cfg.akey);
+$('#tkeyinfo').textContent = describeKey(cfg.tts === 'openai' ? cfg.okey : cfg.ekey);
 render();
 setStatus(cfg.akey ? 'ok' : '', cfg.akey ? 'Claude: key saved' : 'offline · using built-in patter');
 </script>
