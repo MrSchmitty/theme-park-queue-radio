@@ -767,6 +767,9 @@ things — but do them the way THIS character would, using your own vocabulary. 
 break that any of the other hosts could have said is a failed break.
 
 Craft rules:
+- HARD LIMIT: at most two sentences and 45 words. Shorter is better. A break that
+  runs long stops being radio and starts being a monologue.
+- Finish your thought. Never trail off mid-sentence.
 - Write for the ear. It gets read aloud by a voice actor.
 - Plain text only. No emoji, no stage directions, no markdown, no surrounding quotes.
 - Name the track naturally. The titles are often messy filenames — say what a person would say.
@@ -799,7 +802,7 @@ async function claudeLine(title, prevTitle){
       },
       body: JSON.stringify({
         model: cfg.model,
-        max_tokens: 200,
+        max_tokens: 400,
         system: buildSystem(cfg.pkey),
         messages:[{ role:'user', content: ctx }]
       })
@@ -810,8 +813,18 @@ async function claudeLine(title, prevTitle){
       return fallbackLine(title, cfg.pkey);
     }
     const data = await r.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim();
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim();
     if(!text) return fallbackLine(title, cfg.pkey);
+
+    /* If the model ran out of room, cut back to the last finished sentence
+       rather than speaking a fragment. */
+    if(data.stop_reason === 'max_tokens' || !/[.!?…"']\s*$/.test(text)){
+      const cut = Math.max(text.lastIndexOf('.'), text.lastIndexOf('!'),
+                           text.lastIndexOf('?'), text.lastIndexOf('…'));
+      if(cut >= 12) text = text.slice(0, cut+1).trim();
+      else return fallbackLine(title, cfg.pkey);
+      setStatus('', 'Claude: break trimmed to fit');
+    }
     setStatus('ok', 'Claude: connected');
     recentLines.push(text);
     if(recentLines.length > 8) recentLines.shift();
@@ -1025,9 +1038,11 @@ function syncCached(){
 }
 
 /* Speak a line over the ducked music, then hand back control. */
-function deliver(text, url, done, pv){
+function deliver(text, url, done, pv, src){
   const box = $(pv ? '#preview' : '#dj');
   const txt = $(pv ? '#previewtext' : '#djtext');
+  const tag = box.querySelector('b');
+  if(tag) tag.textContent = (pv ? 'Audition' : 'On air') + (src ? ' · ' + src : '');
   talking = true;
   document.body.classList.add('talking');
   txt.textContent = text || 'a recorded break';
@@ -1234,10 +1249,17 @@ async function ytNext(){
           fadeTo(Math.round(volume * DUCK), 700);
           let line, url;
           const bank = (useCached || !cfg.akey) ? cachedBreak(cfg.pkey) : null;
-          if(bank){ line = ''; url = bank; }
-          else if(upcoming && upcoming.id === id){ line = upcoming.line; url = upcoming.url; upcoming = null; }
-          else { line = await claudeLine(titles[id], prevTitle); url = await synthesize(line, cfg.pkey); }
-          deliver(line, url, () => { fadeTo(volume, 2200, prefetch); });
+          let src;
+          if(bank){ line = ''; url = bank; src = 'clip bank'; }
+          else if(upcoming && upcoming.id === id){
+            line = upcoming.line; url = upcoming.url; upcoming = null;
+            src = cfg.akey ? 'written live' : 'offline script';
+          } else {
+            line = await claudeLine(titles[id], prevTitle);
+            url = await synthesize(line, cfg.pkey);
+            src = cfg.akey ? 'written live' : 'offline script';
+          }
+          deliver(line, url, () => { fadeTo(volume, 2200, prefetch); }, false, src);
         } else {
           fadeTo(volume, 1500, prefetch);
         }
@@ -1418,8 +1440,9 @@ async function audition(key){
   if(ducking) fadeTo(Math.round(volume * DUCK), 400);
   $('#previewtext').textContent = 'auditioning…';
   $('#preview').hidden = false;
-  const url = cachedDemo(key) || await synthesize(text, key);
-  deliver(text, url, () => { if(ducking) fadeTo(volume, 1400); }, true);
+  const banked = cachedDemo(key);
+  const url = banked || await synthesize(text, key);
+  deliver(text, url, () => { if(ducking) fadeTo(volume, 1400); }, true, banked ? 'clip bank' : null);
 }
 
 document.querySelectorAll('[data-persona]').forEach(b => {
